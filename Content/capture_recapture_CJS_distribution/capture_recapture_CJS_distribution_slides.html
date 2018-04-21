@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Writing new distributions: Cormack-Jolly-Seber capture-recapture</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Writing new distributions: Cormack-Jolly-Seber capture-recapture</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="basic-capture-recapture-model-cjs" class="slide section level1">
+<h1>Basic capture-recapture model: CJS</h1>
+<p>Capture history: [1 0 0 1 0 0 0]</p>
+<p>1 = captured (alive) 0 = not seen</p>
+<h3 id="one-way-to-look-at-the-probabilities">One way to look at the probabilities</h3>
+<p>P([1 0 0 1 0 0 0]) = P(seen) P(survives + not seen) P(survives + not seen) P(survives + seen) P(never seen again for 3 years)</p>
+<p>P(never seen again for 3 years) = P(dead) + P(survives + not seen) * P(never seen again for 2 years)</p>
+<p>P(never seen again for 2 years) = .... recursive reasoning.</p>
+<h3 id="another-way-to-look-at-the-probabilities-hidden-markov-model">Another way to look at the probabilities (Hidden Markov Model)</h3>
+<p>P([1 0 0 1 0 0 0]) = P(1) P(0 | 1) P(0 | [1 0]) P(1 | [1 0 0]) * ...</p>
+<p>The important part of us is the software flexibility, not the math.</p>
+</div>
+<div id="example-dipper-data" class="slide section level1">
+<h1>Example: Dipper data</h1>
+<ul>
+<li>Very common example</li>
+<li>Used for NIMBLE in Turek et al. (2016), Bayesian Analysis.</li>
+<li>We ignore covariates for sex and flood years or order to create the simplest possible model for software illustration. (We don't recommend skipping important variables in real analyses!)</li>
+<li>294 birds</li>
+<li>7 years</li>
+</ul>
+</div>
+<div id="standard-bugs-code" class="slide section level1">
+<h1>Standard BUGS code</h1>
+<p>Typical BUGS code for this model would be something like this:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">dipper_code</code></pre></div>
+<pre><code>## {
+##     phi ~ dunif(0, 1)
+##     p ~ dunif(0, 1)
+##     for (i in 1:nind) {
+##         for (t in (first[i] + 1):k) {
+##             mu_x[i, t] &lt;- phi * x[i, t - 1]
+##             mu_y[i, t] &lt;- p * x[i, t]
+##             x[i, t] ~ dbin(mu_x[i, t], 1)
+##             y[i, t] ~ dbin(mu_y[i, t], 1)
+##         }
+##     }
+## }</code></pre>
+<h3 id="node-definitions">Node definitions</h3>
+<ul>
+<li><code>phi</code> = survival probability</li>
+<li><code>p</code> = detection (capture) probability</li>
+<li><code>x[i, t]</code> = alive (1) or dead (0) for individual <code>i</code> at time <code>t</code></li>
+<li><code>y[i, t]</code> = captured (1) or not captured (0) for individual <code>i</code> at time <code>t</code>.</li>
+<li><code>first[i]</code> = year of first capture for individual <code>i</code></li>
+</ul>
+<h3 id="additional-setup">Additional setup</h3>
+<ul>
+<li><code>x[i, t]</code> is data from first to last capture for individual <code>i</code>, and latent state thereafter.</li>
+<li><code>y[i, t]</code> is not defined before first capture for individual <code>i</code>.</li>
+</ul>
+<h3 id="think-about-the-graph-and-the-sampling">Think about the graph and the sampling</h3>
+<ul>
+<li>Every time <code>phi</code> or <code>p</code> is sampled, the entire model needs recalculation, so those are costly.</li>
+<li>Every <code>x[i, t]</code> that is a latent state (after last capture) needs to be sampled.</li>
+<li>The conditional distribution of <code>phi</code> and <code>p</code> changes with the states of <code>x[i, t]</code>.</li>
+</ul>
+</div>
+<div id="run-mcmcs-on-basic-model" class="slide section level1">
+<h1>Run MCMCs on basic model</h1>
+<p>We will compare JAGS, NIMBLE with default samplers, and NIMBLE with slice samplers on <code>phi</code> and <code>p</code>.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">dipper_basic_comparison &lt;-<span class="st"> </span><span class="kw">compareMCMCs</span>(
+    dipper_info,
+    <span class="dt">MCMCdefs =</span> <span class="kw">list</span>(
+        <span class="dt">nim_slice_p_phi =</span> <span class="kw">quote</span>({
+            MCMCconf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(Rmodel)
+            MCMCconf$<span class="kw">removeSamplers</span>(<span class="kw">c</span>(<span class="st">&quot;p&quot;</span>,<span class="st">&quot;phi&quot;</span>))
+            MCMCconf$<span class="kw">addSampler</span>(<span class="st">&quot;p&quot;</span>, <span class="dt">type =</span> <span class="st">&quot;slice&quot;</span>)
+            MCMCconf$<span class="kw">addSampler</span>(<span class="st">&quot;phi&quot;</span>, <span class="dt">type =</span> <span class="st">&quot;slice&quot;</span>)
+            MCMCconf
+        })),
+    <span class="dt">MCMCs =</span> <span class="kw">c</span>(<span class="st">&quot;jags&quot;</span>, <span class="st">&quot;nimble&quot;</span>, <span class="st">&quot;nim_slice_p_phi&quot;</span>),
+    <span class="dt">monitors =</span> <span class="kw">c</span>(<span class="st">&quot;phi&quot;</span>, <span class="st">&quot;p&quot;</span>),
+    <span class="dt">niter =</span> <span class="dv">10000</span>,
+    <span class="dt">burnin =</span> <span class="dv">1000</span>,
+    <span class="dt">summary =</span> <span class="ot">FALSE</span>)</code></pre></div>
+<pre><code>## Working on model1</code></pre>
+<pre><code>## defining model...</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## setting data and initial values...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
+<pre><code>## Compiling model graph
+##    Resolving undeclared variables
+##    Allocating nodes
+## Graph information:
+##    Observed stochastic nodes: 1083
+##    Unobserved stochastic nodes: 615
+##    Total graph size: 12048
+## 
+## Initializing model</code></pre>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.
+## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.</code></pre>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">make_MCMC_comparison_pages</span>(dipper_basic_comparison,
+                           <span class="dt">dir =</span> <span class="st">&quot;dipper_basic_comparison&quot;</span>,
+                           <span class="dt">modelNames =</span> <span class="st">&quot;dipper_basic&quot;</span>)
+
+## Optional way to open browser directly from R
+## browseURL(file.path(&quot;dipper_basic_comparison&quot;, &quot;dipper_basic.html&quot;))</code></pre></div>
+<p>Results are <a href="dipper_basic_comparison/dipper_basic.html">here</a></p>
+</div>
+<div id="rewrite-the-model-with-a-distribution-for-capture-histories" class="slide section level1">
+<h1>Rewrite the model with a distribution for capture histories</h1>
+<p>We know how to calculate the probability of a capture history, so we'd like to use that as a distribution. We want this code to work:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">dipper_code_CJS</code></pre></div>
+<pre><code>## {
+##     phi ~ dunif(0, 1)
+##     p ~ dunif(0, 1)
+##     for (i in 1:nind) {
+##         y[i, first[i]:k] ~ dCJS(survival = phi, capture = p, 
+##             l = k - first[i] + 1)
+##     }
+## }</code></pre>
+</div>
+<div id="write-the-distribution-for-capture-histories" class="slide section level1">
+<h1>Write the distribution for capture histories</h1>
+<p>We write the <code>dCJS</code> as a nimbleFunction. I will write it in the state-space model format because this is more generalizable.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">dCJS &lt;-<span class="st"> </span><span class="kw">nimbleFunction</span>(
+    <span class="dt">run =</span> function(<span class="dt">x =</span> <span class="kw">double</span>(<span class="dv">1</span>),    ## standard name for the &quot;data&quot;
+                   <span class="dt">survival =</span> <span class="kw">double</span>(),
+                   <span class="dt">capture =</span> <span class="kw">double</span>(),
+                   <span class="dt">l =</span> <span class="kw">double</span>(),
+                   <span class="dt">log =</span> <span class="kw">integer</span>(<span class="dv">0</span>, <span class="dt">default =</span> <span class="dv">0</span>) ## required log argument
+                   ) {
+        probAliveGivenHistory &lt;-<span class="st"> </span><span class="dv">1</span>
+        ## logProbData will be the final answer
+        logProbData &lt;-<span class="st"> </span><span class="dv">0</span>
+        if(l ==<span class="st"> </span><span class="dv">1</span>) {  ## l==1 should not occur, but be defensive
+            <span class="kw">return</span>(logProbData) 
+        }
+        for(t in <span class="dv">2</span>:l) {
+            ## probAlive is P(Alive(t) | x(1)...x(t-1))
+            ## probAliveGivenHistory is (Alive(t-1) | x(1)...x(t-1))
+            probAlive &lt;-<span class="st"> </span>probAliveGivenHistory *<span class="st"> </span>survival
+            if(x[t] ==<span class="st"> </span><span class="dv">1</span>) {
+                ## ProbThisObs = P(x(t) | x(1)...x(t-1))
+                probThisObs &lt;-<span class="st"> </span>probAlive *<span class="st"> </span>capture
+                probAliveGivenHistory &lt;-<span class="st"> </span><span class="dv">1</span>
+            } else {
+                probAliveNotSeen &lt;-<span class="st"> </span>probAlive *<span class="st"> </span>(<span class="dv">1</span>-capture)
+                probThisObs &lt;-<span class="st"> </span>probAliveNotSeen +<span class="st"> </span>(<span class="dv">1</span>-probAlive)
+                probAliveGivenHistory &lt;-<span class="st"> </span>probAliveNotSeen /<span class="st"> </span>probThisObs
+            }
+            logProbData &lt;-<span class="st"> </span>logProbData +<span class="st"> </span><span class="kw">log</span>(probThisObs)
+        }
+        if(log) <span class="kw">return</span>(logProbData)
+        <span class="kw">return</span>(<span class="kw">exp</span>(logProbData))
+        <span class="kw">returnType</span>(<span class="kw">double</span>())
+    }
+)</code></pre></div>
+<p>We also need to write an &quot;r&quot; function, but if it will not be used, it can be a dummy placeholder (even this may not always be needed).</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">rCJS &lt;-<span class="st"> </span><span class="kw">nimbleFunction</span>(
+    <span class="dt">run =</span> function(<span class="dt">n =</span> <span class="kw">integer</span>(),
+                   <span class="dt">survival =</span> <span class="kw">double</span>(),
+                   <span class="dt">capture =</span> <span class="kw">double</span>(),
+                   <span class="dt">l =</span> <span class="kw">double</span>()) {
+        <span class="kw">returnType</span>(<span class="kw">double</span>(<span class="dv">1</span>))
+        <span class="kw">return</span>(<span class="kw">numeric</span>(l)) ## dummy behavior
+    }
+)</code></pre></div>
+</div>
+<div id="run-mcmcs-on-the-new-model" class="slide section level1">
+<h1>Run MCMCs on the new model</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">dipper_CJR_comparison &lt;-<span class="st"> </span><span class="kw">compareMCMCs</span>(
+    dipper_info_CJS,
+    <span class="dt">MCMCdefs =</span> <span class="kw">list</span>(
+        <span class="dt">nimCJS_slice_p_phi =</span> <span class="kw">quote</span>({
+            MCMCconf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(Rmodel)
+            MCMCconf$<span class="kw">removeSamplers</span>(<span class="kw">c</span>(<span class="st">&quot;p&quot;</span>,<span class="st">&quot;phi&quot;</span>))
+            MCMCconf$<span class="kw">addSampler</span>(<span class="st">&quot;p&quot;</span>, <span class="dt">type =</span> <span class="st">&quot;slice&quot;</span>)
+            MCMCconf$<span class="kw">addSampler</span>(<span class="st">&quot;phi&quot;</span>, <span class="dt">type =</span> <span class="st">&quot;slice&quot;</span>)
+            MCMCconf
+        })),
+    <span class="dt">MCMCs =</span> <span class="kw">c</span>(<span class="st">&quot;nimble&quot;</span>, <span class="st">&quot;nimCJS_slice_p_phi&quot;</span>),
+    <span class="dt">monitors =</span> <span class="kw">c</span>(<span class="st">&quot;phi&quot;</span>, <span class="st">&quot;p&quot;</span>),
+    <span class="dt">niter =</span> <span class="dv">10000</span>,
+    <span class="dt">burnin =</span> <span class="dv">1000</span>,
+    <span class="dt">summary =</span> <span class="ot">FALSE</span>)</code></pre></div>
+<pre><code>## Working on model1</code></pre>
+<pre><code>## defining model...</code></pre>
+<pre><code>## Registering the following user-provided distributions: dCJS .
+## NIMBLE has registered dCJS as a distribution based on its use in BUGS code. Note that if you make changes to the nimbleFunctions for the distribution, you must call &#39;deregisterDistributions&#39; before using the distribution in BUGS code for those changes to take effect.</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## setting data and initial values...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.
+## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.
+## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.</code></pre>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">dipper_CJR_comparison[[<span class="dv">1</span>]] &lt;-<span class="st"> </span><span class="kw">rename_MCMC_comparison_method</span>(<span class="st">&quot;nimble&quot;</span>, <span class="st">&quot;nimbleCJS&quot;</span>, dipper_CJR_comparison[[<span class="dv">1</span>]])
+
+dipper_all_comparison &lt;-<span class="st"> </span><span class="kw">combine_MCMC_comparison_results</span>(dipper_basic_comparison[[<span class="dv">1</span>]],
+                                                         dipper_CJR_comparison[[<span class="dv">1</span>]],
+                                                         <span class="dt">name =</span> <span class="st">&quot;dipper_MCMC_comparison&quot;</span>)
+
+<span class="kw">make_MCMC_comparison_pages</span>(dipper_all_comparison,
+                           <span class="dt">dir =</span> <span class="st">&quot;dipper_all_comparison&quot;</span>,
+                           <span class="dt">modelNames =</span> <span class="st">&quot;dipper&quot;</span>)
+
+## browseURL(file.path(&quot;dipper_all_comparison&quot;, &quot;dipper.html&quot;))</code></pre></div>
+<p>Results are <a href="dipper_all_comparison/dipper.html">here</a></p>
+</div>
+<div id="conclusions" class="slide section level1">
+<h1>Conclusions</h1>
+<ul>
+<li><p>Removing latent states by numerically integrating (summing) over them can be beneficial, sometimes enormously so.</p></li>
+<li><p>One might argue the <code>dCJS</code> requires technical understanding but then the final BUGS code is easier to write and understand.</p></li>
+</ul>
+</div>
+</body>
+</html>

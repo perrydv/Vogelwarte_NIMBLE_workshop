@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Writing new distributions: Occupancy exercise</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Writing new distributions: Occupancy exercise</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="an-example-occupancy-model" class="slide section level1">
+<h1>An example occupancy model</h1>
+<p>We take our example from Applied Hierarchical Modeling in Ecology, Vol I (Kéry and Royle): Chapter 10, Section 10.4.</p>
+<ul>
+<li>A simulated example</li>
+<li><code>M</code> = 100 sites</li>
+<li><code>J</code> = 3 visits to each site</li>
+<li><code>vegHt</code> = vegetation height: logistic effect on occupancy probability</li>
+<li><code>wind</code> = wind speed: logistic effect on detection probability</li>
+</ul>
+</div>
+<div id="occupancy-probabilities" class="slide section level1">
+<h1>Occupancy probabilities</h1>
+<p>Define <code>X[i, t]</code> = 1 if the species was detected as site <code>i</code> at time <code>t</code>, 0 otherwise.</p>
+<p>Probability(<code>X[i, 1:T]</code>) = Probability(Site Occupied) Probability(Detections and non-detections) + Probability(Site Not Occupied) Indicator(All <code>X[i, t]</code> are 0)</p>
+</div>
+<div id="lets-see-the-figures-from-ahm-book-code" class="slide section level1">
+<h1>Let's see the figures from AHM book code</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">cur_dir &lt;-<span class="st"> </span><span class="kw">getwd</span>()
+<span class="kw">setwd</span>(<span class="kw">file.path</span>(nimble_course_dir,
+                 <span class="st">&#39;examples_code&#39;</span>,
+                 <span class="st">&#39;occupancy_with_covariates&#39;</span>))
+.GlobalEnv$DO_PLOT &lt;-<span class="st"> </span><span class="ot">TRUE</span>
+<span class="kw">source</span>(<span class="st">&quot;occupancy_with_covariates.R&quot;</span>)</code></pre></div>
+<pre><code>## [1] &quot;do plot&quot;
+## [1] TRUE</code></pre>
+<pre><code>## List of 7
+##  $ y     : int [1:100, 1:3] 0 0 0 0 0 0 0 0 1 0 ...
+##  $ vegHt : num [1:100] -0.973 -0.953 -0.882 -0.876 -0.859 ...
+##  $ wind  : num [1:100, 1:3] -0.465 -0.5627 0.0336 -0.4621 -0.6377 ...
+##  $ M     : int 100
+##  $ J     : int 3
+##  $ XvegHt: num [1:100] -1 -0.98 -0.96 -0.939 -0.919 ...
+##  $ Xwind : num [1:100] -1 -0.98 -0.96 -0.939 -0.919 ...</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">setwd</span>(cur_dir)</code></pre></div>
+<div class="figure">
+<img src="figure/AHM-figures-1.png" alt="plot of chunk AHM-figures" />
+<p class="caption">plot of chunk AHM-figures</p>
+</div>
+</div>
+<div id="bugs-code-for-this-model" class="slide section level1">
+<h1>BUGS code for this model</h1>
+<p>Here is the BUGS code provided by AHM.</p>
+<ul>
+<li>It may be slightly modified to work for NIMBLE.</li>
+<li><p>Derived (posterior predictive) quantities are shown here but omitted below when we run MCMC.</p>
+<ul>
+<li>These quantities will not be available when we re-write the model. Keeping them in the basic model would be an unfair computational cost in this comparison.</li>
+</ul></li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">Section10p4_code</code></pre></div>
+<pre><code>## {
+##     mean.p ~ dunif(0, 1)
+##     alpha0 &lt;- logit(mean.p)
+##     alpha1 ~ dunif(-20, 20)
+##     mean.psi ~ dunif(0, 1)
+##     beta0 &lt;- logit(mean.psi)
+##     beta1 ~ dunif(-20, 20)
+##     for (i in 1:M) {
+##         z[i] ~ dbern(psi[i])
+##         logit(psi[i]) &lt;- beta0 + beta1 * vegHt[i]
+##         for (j in 1:J) {
+##             y[i, j] ~ dbern(p.eff[i, j])
+##             p.eff[i, j] &lt;- z[i] * p[i, j]
+##             logit(p[i, j]) &lt;- alpha0 + alpha1 * wind[i, j]
+##         }
+##     }
+##     N.occ &lt;- sum(z[1:M])
+##     psi.fs &lt;- N.occ/M
+##     for (k in 1:100) {
+##         logit(psi.pred[k]) &lt;- beta0 + beta1 * XvegHt[k]
+##         logit(p.pred[k]) &lt;- alpha0 + alpha1 * Xwind[k]
+##     }
+## }</code></pre>
+<h2 id="thinking-about-the-graph">Thinking about the graph</h2>
+<ul>
+<li>There is a latent state, <code>z[i]</code> for every site.</li>
+</ul>
+<h2 id="version-we-will-use">Version we will use</h2>
+<p>The version without derived quantities is this:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">Section10p4_noDerived_code</code></pre></div>
+<pre><code>## {
+##     mean.p ~ dunif(0, 1)
+##     alpha0 &lt;- logit(mean.p)
+##     alpha1 ~ dunif(-20, 20)
+##     mean.psi ~ dunif(0, 1)
+##     beta0 &lt;- logit(mean.psi)
+##     beta1 ~ dunif(-20, 20)
+##     for (i in 1:M) {
+##         z[i] ~ dbern(psi[i])
+##         logit(psi[i]) &lt;- beta0 + beta1 * vegHt[i]
+##         for (j in 1:J) {
+##             y[i, j] ~ dbern(p.eff[i, j])
+##             p.eff[i, j] &lt;- z[i] * p[i, j]
+##             logit(p[i, j]) &lt;- alpha0 + alpha1 * wind[i, j]
+##         }
+##     }
+## }</code></pre>
+</div>
+<div id="basic-mcmc-comparison" class="slide section level1">
+<h1>Basic MCMC comparison</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">params_of_interest &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;alpha0&quot;</span>, <span class="st">&quot;alpha1&quot;</span>, <span class="st">&quot;beta0&quot;</span>, <span class="st">&quot;beta1&quot;</span>)
+## N.occ would be of interest, but we&#39;ll need to get that after
+## MCMC in the next version, so we skip it here too.
+
+ni &lt;-<span class="st"> </span><span class="dv">25000</span>
+nb &lt;-<span class="st"> </span><span class="dv">2000</span>
+
+occupancy_basic_comparison &lt;-<span class="st"> </span><span class="kw">compareMCMCs</span>(
+  <span class="dt">modelInfo =</span> <span class="kw">list</span>(
+    <span class="dt">code =</span> Section10p4_noDerived_code,
+    <span class="dt">data =</span> occupancy_data,
+    <span class="dt">inits =</span> <span class="kw">occupancy_inits</span>()
+  ),
+  ## making the comparison for all latent states in params
+  ## would be cumbersome
+  <span class="dt">monitors =</span> params_of_interest,
+  <span class="dt">MCMCs =</span> <span class="kw">c</span>(<span class="st">&#39;nimble&#39;</span>, <span class="st">&#39;jags&#39;</span>),
+  <span class="dt">summary =</span> <span class="ot">FALSE</span>,
+  <span class="dt">burnin =</span> nb,
+  <span class="dt">niter =</span> ni
+)</code></pre></div>
+<pre><code>## Working on model1</code></pre>
+<pre><code>## defining model...</code></pre>
+<pre><code>## Detected y as data within &#39;constants&#39;.</code></pre>
+<pre><code>## Adding y as data for building model.</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## setting data and initial values...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions...
+## model building finished.</code></pre>
+<pre><code>## Warning in rjags::jags.model(file = modelFileName, data =
+## constantsAndData, : Unused variable &quot;XvegHt&quot; in data</code></pre>
+<pre><code>## Warning in rjags::jags.model(file = modelFileName, data =
+## constantsAndData, : Unused variable &quot;Xwind&quot; in data</code></pre>
+<pre><code>## Compiling model graph
+##    Resolving undeclared variables
+##    Allocating nodes
+## Graph information:
+##    Observed stochastic nodes: 300
+##    Unobserved stochastic nodes: 104
+##    Total graph size: 2317
+## 
+## Initializing model</code></pre>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.
+## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.</code></pre>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">make_MCMC_comparison_pages</span>(occupancy_basic_comparison,
+                           <span class="dt">modelNames =</span> <span class="st">&quot;Section10p4&quot;</span>,
+                           <span class="dt">dir =</span> <span class="st">&quot;occupancy_basic_comparison&quot;</span>)
+
+##browseURL(file.path(occupancy_basic_comparison, &quot;Section10p4.html&quot;))</code></pre></div>
+<p>Results are <a href="occupancy_basic_comparison/Section10p4.html">here</a></p>
+</div>
+<div id="exercise" class="slide section level1">
+<h1>Exercise</h1>
+<p>Rewrite this model to use a <code>dOccupancy</code> distribution for the vector <code>y[i, 1:J]</code> of observations from each size <code>i</code>. This should allow you to remove the <code>z[i]</code> nodes from the model. You will also need to write <code>dOccupancy</code> itself.</p>
+</div>
+</body>
+</html>

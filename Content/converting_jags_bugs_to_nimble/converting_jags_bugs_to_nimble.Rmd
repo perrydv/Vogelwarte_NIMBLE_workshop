@@ -1,0 +1,66 @@
+---
+title: "Converting from JAGS to NIMBLE"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley (with thanks to Lauren Ponisio)"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+```
+
+# Steps
+
+1. Wrap your JAGS/BUGS model code in `nimbleCode({})`, directly in R.
+
+    - This replaces the step of writing or generating a file containing the model code.
+
+    - Alternatively, you can read
+  JAGS- and BUGS-formatted code and data files using
+  `readBUGSmodel`.
+
+2. Provide information about missing or empty indices.
+
+    - Example: If `x` is a matrix, you must write at least `x[,]` to show it has two dimensions.
+    - If other declarations make the size of `x` clear, `x[,]` will work.
+    - If not, either provide index ranges (e.g. `x[1:n, 1:m]`) or use the `dimensions` argument to `nimbleModel`.
+
+3. Convert any use of truncation syntax
+
+    - e.g. `x ~ dnorm(0, tau) T(a, b)` $\rightarrow$ `x ~ T(dnorm(0, tau), a, b)`.
+
+    - If reading model code from a file using `readBUGSmodel`, the BUGS/JAGS truncation notation will work.
+
+3. Split the `data` for BUGS/JAGS into `data` and
+  `constants` for NIMBLE.
+
+    - Constants are necessary to define the
+  model, such as `nsite` in `for(i in 1:nsite) {...}`.
+    - Data are
+  observed values of some variables.
+    - Alternatively, one can provide a list of both
+  constants and data for the `constants` argument to
+  `nimbleModel`, and NIMBLE will try to determine which is which.
+
+4. When using `nimbleModel`, convert `inits` and `monitors` inputs from functions to named lists.
+
+    - When using `nimbleMCMC`, `inits` can be a function, e.g. as in R packages for jags.
+
+5. In some cases, NIMBLE needs more complete `inits` than JAGS or possibly BUGS.
+
+    - In a model with stochastic indices, those indices should have `inits` values.
+
+6. To run an MCMC on your model, you have two choices:
+
+    - Use `nimbleMCMC()` much like a call to
+  `jags()` from the `R2jags` package.  This will take all steps to
+  set up and run an MCMC using
+   NIMBLE's default configuration.
+   
+    - To use NIMBLE's full flexibiilty, build the model, configure
+   and build the MCMC, and compile both the model and MCMC.  Then run the MCMC either directly or using `runMCMC`.
+

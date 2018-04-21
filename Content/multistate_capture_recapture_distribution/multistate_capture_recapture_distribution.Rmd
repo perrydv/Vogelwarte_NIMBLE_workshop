@@ -1,0 +1,207 @@
+---
+title: "Writing new distributions: multi-state capture-recapture"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
+    nimble_course_dir <- file.path(getwd(),'..')
+cur_dir <- getwd()
+setwd(file.path(nimble_course_dir,
+                 'examples_code',
+                 'multi_state_CR_orchids'))
+source("orchids_basic.R")
+source("orchids_dDHMM.R")
+setwd(cur_dir)
+
+```
+
+# Multi-state capture-recapture
+
+- State/Capture history = [0 A 0 C B 0...] where "0" is not seen and A, B, C are observed states.
+
+- When observed, states may be accurate or noisy.
+
+- States may be individual condition (breeding/non-breeding), locations, or other.
+
+- Model is defined by state transition and observation probabilities
+
+# Orchids (ladyslipper) example
+
+- From Bayesian Population Analysis Using WinBUGS (K&#233;ry and Schaub)
+- Orchids modeled in states "vegetative", "flowering", "dormant", "dead"
+- Observations: "seen vegetative", "seen flowering", "not seen".
+- k = 11 annual observation periods 
+- n = 250 unique plants
+- n = 236 plants seen before the last observation time
+
+This is a simple multi-state model because the state when not seen is unknown.
+
+Obviously multi-state models can be more complicated than this.
+
+# BUGS code 
+
+This code is from BPA:
+
+```{r basic-code}
+orchids_code
+```
+
+- `ps[1, i, t, 2]` = probability of transition from state 1 to 2 for individual `i` at time `t`.
+- `po[1, i, t, 2]` = probability of being observed in state 2 when in state 1 for individual `i` at time `t`.
+- `s[t]` = survival probability at time `t`.
+- `psiV[j]` = probability of transition from state 1 (Vegetative) to state j.
+- `psiF[j]` = probability of transition from state 2 (Flowering) to state j.
+- `psiD[j]` = probability of transition from state 3 (Dormant) to state j.
+
+## Thinking about the code and the model's graph:
+
+- Index `i` in `ps` and `po` is unnecessary in this model.   It creates thousands more edges (dependencies).
+- Keeping indx `i` is ok for pretending we have a model with individual effects.
+- According to Turek et al. 2016, this model has 2.157 latent variables.
+- categorical distributions (`dcat`) are costly to sample with default methods: Samplers will try every possible value on every update, even when impossible or unlikely.
+
+    - We could write a possibly more efficiency sampler in NIMBLE, but that's not our goal right now.
+
+# Compare NIMBLE and JAGS on basic model
+
+Let's run MCMC on the basic model.
+
+```{r MCMC-basic}
+parameters <- c("s", "psiV", "psiF", "psiD")
+## One could argue to monitor the underlying random variables instead:
+## parameters <- c('a', 'b', 'c', 's')
+
+
+orchids_basic_comparison <- compareMCMCs(
+    orchids_info,
+    MCMCs = c("jags", "nimble"),
+    monitors = parameters,
+    niter = 20000,
+    burnin = 2000,
+    summary = FALSE
+)
+
+make_MCMC_comparison_pages(orchids_basic_comparison,
+                           dir = "orchids_basic_comparison",
+                           modelNames = "orchids_basic")
+
+## browseURL(file.path("orchids_basic_comparison", "orchids_basic.html"))
+
+```
+
+Results are [here](orchids_basic_comparison/orchids_basic.html).
+
+We could start working on customized sampler choices.
+
+We can look more closely at the numbers like this:
+```{r inspect-basic-MCMC}
+orchids_basic_comparison[[1]]$summary
+```
+
+We see that `psiD`, especially `psiD[3]`, are the worst-mixing
+parameters, so we could focus customization effort there.
+
+But our goal here is to rewrite the model using multistate CR.
+
+# Rewriting the model with a dynamic hidden Markov model distribution (dDHMM) #
+
+We want the model to work like this
+
+```{r orchids-DHMM-model}
+orchids_DHMM_code
+```
+
+# Writing dDHMM
+
+Here is a somewhat general version of a dynamic HMM distribution, from Turek et al. (2016).
+
+```{r dDHMM}
+dDHMMorchid <- nimbleFunction(
+    run = function(x = double(1),    ## Observed capture (state) history
+                   length = double(),## length of x (needed as a separate param for rDHMM)
+                   prior = double(1),## 
+                   Z = double(2),
+                   T = double(3),
+                   log = integer(0, default = 0)) {
+        pi <- prior
+        logL <- 0
+        for(t in 1:length) {
+            Zpi <- Z[x[t], ] * pi
+            sumZpi <- sum(Zpi)
+            logL <- logL + log(sumZpi)
+            if(t != length)   pi <- (T[,,t] %*% asCol(Zpi) / sumZpi)[ ,1]
+        }
+        returnType(double())
+        if(log) return(logL)
+        return(exp(logL))
+    }
+)
+
+rDHMMorchid <- nimbleFunction(
+    run = function(n = integer(),
+        length = double(), prior = double(1),
+        Z = double(2),
+        T = double(3)) {
+        if(n != 1) print('should only specify n=1 in rDHMM() distribution')
+        print('STILL NEED TO WRITE THE rDHMM() METHOD!')
+        returnType(double(1))
+        return(numeric(length, value = 1))
+    }
+)
+
+```
+
+### Some notes:
+
+- The `prior` could be exchanged for a known initial state.
+- Turek et al. set a 50/50 prior in Vegetative/Flowering, which I think ends up not mattering in this case.
+- We call it "dynamic" because the transition matrix `T` can vary through time.
+- One could make a narrower version that takes survival and transition vectors as inputs, rather than computing the `T` matrix in the model first.
+
+# Run MCMC with the dDHMM version
+
+- Slightly different inputs are needed.
+
+```{r orchids-DHMM}
+orchids_DHMM_comparison <- compareMCMCs(
+    list(code = orchids_DHMM_code,
+         data = orchids_DHMM_data,
+         constants = orchids_DHMM_constants,
+         inits = orchids_DHMM_inits()), 
+    MCMCs = c("nimble"),
+    monitors = parameters,
+    niter = 20000,
+    burnin = 2000,
+    summary = FALSE
+)
+
+orchids_DHMM_comparison[[1]] <- rename_MCMC_comparison_method("nimble", "nimbleDHMM", orchids_DHMM_comparison[[1]])
+
+
+orchids_all_comparison <- combine_MCMC_comparison_results(orchids_basic_comparison[[1]],
+                                                         orchids_DHMM_comparison[[1]],
+                                                         name = "orchids_MCMC_comparison")
+
+make_MCMC_comparison_pages(orchids_all_comparison,
+                           dir = "orchids_all_comparison",
+                           modelNames = "orchids")
+
+## browseURL(file.path("orchids_all_comparison", "orchids.html"))
+
+```
+
+Results are [here](orchids_all_comparison/orchids.html)
+
+# Conclusions
+
+- A good improvement was seen, but not as much as for the dipper example.
+- One could still proceed with customizing samplers with the dDHMM version of the model.
+- In the Canada Goose example, Turek et al. also grouped duplicate capture histories together.

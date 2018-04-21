@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Introduction to compareMCMCs</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Introduction to compareMCMCs</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="automating-mcmc-comparisons-in-nimble" class="slide section level1">
+<h1>Automating MCMC comparisons in NIMBLE</h1>
+<ul>
+<li>NIMBLE provides tools to automatically compare MCMC efficiency across methods.</li>
+<li>Methods can include different NIMBLE MCMC configurations as well as JAGS, OpenBUGS/WinBUGS (not tested much) and Stan (separate code required).</li>
+<li>We will use <code>compareMCMCs</code>, which calls <code>MCMCsuite</code> internally.</li>
+<li><code>MCMCsuite</code> can be used directy as well.</li>
+</ul>
+</div>
+<div id="example-metropolis-hastings-vs-slice-sampling.-nimble-vs.-jags" class="slide section level1">
+<h1>Example: Metropolis-Hastings vs slice sampling. NIMBLE vs. JAGS</h1>
+<ul>
+<li><code>compareMCMCs</code> and <code>MCMCsuite</code> need to build and compile the model themselves.</li>
+<li>(This may become more flexible in the future.)</li>
+<li>These functions provide a variety of pre-defined MCMC configurations and a system for providing your own.</li>
+<li>I will illustrate using slice samplers instead of the default Metropolis-Hastings samplers for <code>p</code> and <code>phi</code>.</li>
+<li>(Assigning <em>all</em> samplers to be slice samplers is available as pre-defined option &quot;nimble_slice&quot; in the <code>MCMCs</code> argument.)</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">dipperInfo &lt;-<span class="st"> </span><span class="kw">list</span>(<span class="dt">code=</span>dipper_code,
+                   <span class="dt">constants=</span>constants,
+                   <span class="dt">data=</span>data, <span class="dt">inits=</span>inits)
+
+## A function to replace default samplers with slice
+## samplers for requested nodes
+configureSlice &lt;-<span class="st"> </span>function(Rmodel, nodes) {
+    MCMCconf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(Rmodel) ## get a default configuration
+    ## print default samplers for illustration
+    MCMCconf$<span class="kw">printSamplers</span>(<span class="kw">c</span>(<span class="st">&#39;p&#39;</span>,<span class="st">&#39;phi&#39;</span>))
+    for(node in nodes) {
+        MCMCconf$<span class="kw">removeSamplers</span>(node)
+        MCMCconf$<span class="kw">addSampler</span>(<span class="dt">target =</span> node, <span class="dt">type =</span> <span class="st">&quot;slice&quot;</span>)
+    }
+    ## print modified samplers for illustration
+    MCMCconf$<span class="kw">printSamplers</span>(<span class="kw">c</span>(<span class="st">&#39;p&#39;</span>,<span class="st">&#39;phi&#39;</span>))
+    MCMCconf
+}
+
+## This is only needed during Rmarkdown/NIMBLE non-standard evaluation conflicts
+.GlobalEnv$configureSlice &lt;-<span class="st"> </span>configureSlice
+
+## A configuration list for compareMCMCs
+MCMCdefs &lt;-<span class="st"> </span><span class="kw">list</span>(
+    <span class="dt">nimble_custom =</span> <span class="kw">quote</span>({
+        ## This code will be evaluated in an environment
+        ## where &#39;Rmodel&#39; is the model.
+        ## The use of .GlobalEnv is because of strange behavior
+        ## during Rmarkdown document generation.
+        customConf &lt;-<span class="st"> </span><span class="kw">configureSlice</span>(Rmodel, <span class="kw">c</span>(<span class="st">&#39;p&#39;</span>, <span class="st">&#39;phi&#39;</span>))
+        ## We must return a configuration
+        customConf
+    })
+)
+
+dipper_comparisons &lt;-<span class="st"> </span><span class="kw">compareMCMCs</span>(
+    dipperInfo,
+    <span class="dt">MCMCs =</span> <span class="kw">c</span>(<span class="st">&quot;jags&quot;</span>, <span class="st">&quot;nimble&quot;</span>, <span class="st">&quot;nimble_custom&quot;</span>),
+    <span class="dt">MCMCdefs =</span> MCMCdefs,
+    <span class="dt">monitors =</span> <span class="kw">c</span>(<span class="st">&quot;phi&quot;</span>, <span class="st">&quot;p&quot;</span>),
+    <span class="dt">niter =</span> <span class="dv">10000</span>,
+    <span class="dt">burnin =</span> <span class="dv">1000</span>,
+    <span class="dt">summary =</span> <span class="ot">FALSE</span>)</code></pre></div>
+<pre><code>## Working on model1</code></pre>
+<pre><code>## defining model...</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## setting data and initial values...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
+<pre><code>## Compiling model graph
+##    Resolving undeclared variables
+##    Allocating nodes
+## Graph information:
+##    Observed stochastic nodes: 848
+##    Unobserved stochastic nodes: 850
+##    Total graph size: 12463
+## 
+## Initializing model
+## 
+## [1] RW sampler: phi
+## [2] RW sampler: p
+## [849] slice sampler: p
+## [850] slice sampler: phi</code></pre>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.
+## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.</code></pre>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">make_MCMC_comparison_pages</span>(dipper_comparisons,
+                           <span class="dt">dir =</span> <span class="st">&quot;dipper_comparison_results&quot;</span>,
+                           <span class="dt">modelNames =</span> <span class="st">&quot;dipper_comparisons&quot;</span>)</code></pre></div>
+<p>The results are <a href="dipper_comparison_results/dipper_comparisons.html">here</a></p>
+</div>
+</body>
+</html>

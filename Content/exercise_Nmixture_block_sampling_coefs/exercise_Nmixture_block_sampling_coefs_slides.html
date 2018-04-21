@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Block sampling coefficients in Nmixture example</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Block sampling coefficients in Nmixture example</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="refresher-on-the-nmixture-with-covariates-example" class="slide section level1">
+<h1>Refresher on the Nmixture with covariates example</h1>
+<ul>
+<li><p>Simulated example from AHM Chapter 6.4.</p></li>
+<li><p>3 sampling occasions at each of 100 sites split among 3 habitat types.</p></li>
+<li><p>Detection covariate is <code>Xwind</code>. Abundance covariate is <code>XvegHt</code>.</p></li>
+<li><p>What needs to be sampled in this model?</p>
+<ul>
+<li><code>alpha0[1]</code> ... <code>alpha0[3]</code>, detection intercepts at 3 sampling times</li>
+<li><code>alpha1[1]</code> ... <code>alpha1[3]</code>, detection slopes at 3 sampling times</li>
+<li><code>beta0[1]</code> ... <code>beta0[3]</code>, abundance intercepts at 3 sampling times</li>
+<li><code>beta1[1]</code> ... <code>beta1[3]</code>, abundance slopes at 3 sampling times</li>
+<li><code>N[1]</code> ... <code>N[100]</code>, latent population size at 100 sites</li>
+</ul></li>
+<li><p>There are some posterior predictive nodes.</p></li>
+</ul>
+</div>
+<div id="look-at-the-bugs-code" class="slide section level1">
+<h1>Look at the BUGS code</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">Section6p4_code</code></pre></div>
+<pre><code>## {
+##     for (k in 1:3) {
+##         alpha0[k] ~ dunif(-10, 10)
+##         alpha1[k] ~ dunif(-10, 10)
+##         beta0[k] ~ dunif(-10, 10)
+##         beta1[k] ~ dunif(-10, 10)
+##     }
+##     for (i in 1:M) {
+##         N[i] ~ dpois(lambda[i])
+##         log(lambda[i]) &lt;- beta0[hab[i]] + beta1[hab[i]] * vegHt[i]
+##         critical[i] &lt;- step(2 - N[i])
+##         z[i] &lt;- step(N[i] - 0.5)
+##         for (j in 1:J) {
+##             C[i, j] ~ dbin(p[i, j], N[i])
+##             logit(p[i, j]) &lt;- alpha0[j] + alpha1[j] * wind[i, 
+##                 j]
+##         }
+##     }
+##     Nocc &lt;- sum(z[1:100])
+##     Ntotal &lt;- sum(N[1:100])
+##     Nhab[1] &lt;- sum(N[1:33])
+##     Nhab[2] &lt;- sum(N[34:66])
+##     Nhab[3] &lt;- sum(N[67:100])
+##     for (k in 1:100) {
+##         for (level in 1:3) {
+##             lam.pred[k, level] &lt;- exp(beta0[level] + beta1[level] * 
+##                 XvegHt[k])
+##             logit(p.pred[k, level]) &lt;- alpha0[level] + alpha1[level] * 
+##                 Xwind[k]
+##         }
+##     }
+##     N.critical &lt;- sum(critical[1:100])
+## }</code></pre>
+</div>
+<div id="what-are-default-samplers" class="slide section level1">
+<h1>What are default samplers?</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">MCMCconf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(Nmix_model)
+MCMCconf$<span class="kw">printSamplers</span>()</code></pre></div>
+<pre><code>## [1]   RW sampler: alpha0[1]
+## [2]   RW sampler: alpha0[2]
+## [3]   RW sampler: alpha0[3]
+## [4]   RW sampler: alpha1[1]
+## [5]   RW sampler: alpha1[2]
+## [6]   RW sampler: alpha1[3]
+## [7]   RW sampler: beta0[1]
+## [8]   RW sampler: beta0[2]
+## [9]   RW sampler: beta0[3]
+## [10]  RW sampler: beta1[1]
+## [11]  RW sampler: beta1[2]
+## [12]  RW sampler: beta1[3]
+## [13]  slice sampler: N[1]
+## [14]  slice sampler: N[2]
+## [15]  slice sampler: N[3]
+## [16]  slice sampler: N[4]
+## [17]  slice sampler: N[5]
+## [18]  slice sampler: N[6]
+## [19]  slice sampler: N[7]
+## [20]  slice sampler: N[8]
+## [21]  slice sampler: N[9]
+## [22]  slice sampler: N[10]
+## [23]  slice sampler: N[11]
+## [24]  slice sampler: N[12]
+## [25]  slice sampler: N[13]
+## [26]  slice sampler: N[14]
+## [27]  slice sampler: N[15]
+## [28]  slice sampler: N[16]
+## [29]  slice sampler: N[17]
+## [30]  slice sampler: N[18]
+## [31]  slice sampler: N[19]
+## [32]  slice sampler: N[20]
+## [33]  slice sampler: N[21]
+## [34]  slice sampler: N[22]
+## [35]  slice sampler: N[23]
+## [36]  slice sampler: N[24]
+## [37]  slice sampler: N[25]
+## [38]  slice sampler: N[26]
+## [39]  slice sampler: N[27]
+## [40]  slice sampler: N[28]
+## [41]  slice sampler: N[29]
+## [42]  slice sampler: N[30]
+## [43]  slice sampler: N[31]
+## [44]  slice sampler: N[32]
+## [45]  slice sampler: N[33]
+## [46]  slice sampler: N[34]
+## [47]  slice sampler: N[35]
+## [48]  slice sampler: N[36]
+## [49]  slice sampler: N[37]
+## [50]  slice sampler: N[38]
+## [51]  slice sampler: N[39]
+## [52]  slice sampler: N[40]
+## [53]  slice sampler: N[41]
+## [54]  slice sampler: N[42]
+## [55]  slice sampler: N[43]
+## [56]  slice sampler: N[44]
+## [57]  slice sampler: N[45]
+## [58]  slice sampler: N[46]
+## [59]  slice sampler: N[47]
+## [60]  slice sampler: N[48]
+## [61]  slice sampler: N[49]
+## [62]  slice sampler: N[50]
+## [63]  slice sampler: N[51]
+## [64]  slice sampler: N[52]
+## [65]  slice sampler: N[53]
+## [66]  slice sampler: N[54]
+## [67]  slice sampler: N[55]
+## [68]  slice sampler: N[56]
+## [69]  slice sampler: N[57]
+## [70]  slice sampler: N[58]
+## [71]  slice sampler: N[59]
+## [72]  slice sampler: N[60]
+## [73]  slice sampler: N[61]
+## [74]  slice sampler: N[62]
+## [75]  slice sampler: N[63]
+## [76]  slice sampler: N[64]
+## [77]  slice sampler: N[65]
+## [78]  slice sampler: N[66]
+## [79]  slice sampler: N[67]
+## [80]  slice sampler: N[68]
+## [81]  slice sampler: N[69]
+## [82]  slice sampler: N[70]
+## [83]  slice sampler: N[71]
+## [84]  slice sampler: N[72]
+## [85]  slice sampler: N[73]
+## [86]  slice sampler: N[74]
+## [87]  slice sampler: N[75]
+## [88]  slice sampler: N[76]
+## [89]  slice sampler: N[77]
+## [90]  slice sampler: N[78]
+## [91]  slice sampler: N[79]
+## [92]  slice sampler: N[80]
+## [93]  slice sampler: N[81]
+## [94]  slice sampler: N[82]
+## [95]  slice sampler: N[83]
+## [96]  slice sampler: N[84]
+## [97]  slice sampler: N[85]
+## [98]  slice sampler: N[86]
+## [99]  slice sampler: N[87]
+## [100] slice sampler: N[88]
+## [101] slice sampler: N[89]
+## [102] slice sampler: N[90]
+## [103] slice sampler: N[91]
+## [104] slice sampler: N[92]
+## [105] slice sampler: N[93]
+## [106] slice sampler: N[94]
+## [107] slice sampler: N[95]
+## [108] slice sampler: N[96]
+## [109] slice sampler: N[97]
+## [110] slice sampler: N[98]
+## [111] slice sampler: N[99]
+## [112] slice sampler: N[100]</code></pre>
+</div>
+<div id="think-about-scalar-samplers" class="slide section level1">
+<h1>Think about scalar samplers</h1>
+<ul>
+<li><p>By default NIMBLE often uses adaptive random-walk Metropolis-Hastings samplers (<code>type = 'RW'</code>) on scalar nodes. These are computationally fast but do not always yield a move.</p></li>
+<li><p>An alternative is slice sampling (<code>type = 'slice'</code>). These always yield a move but are computationally slower.</p></li>
+<li><p>JAGS uses slice samplers more extensively than NIMBLE's default, but you can always customize NIMBLE's choices.</p></li>
+<li><p>JAGS does not use Metropolis-Hastings, IIUC.</p></li>
+</ul>
+</div>
+<div id="think-about-the-samplers-posterior-correlations" class="slide section level1">
+<h1>Think about the samplers: posterior correlations</h1>
+<ul>
+<li><p>Coefficients in linear predictors generally yield correlated posteriors, for which block sampling may help.</p>
+<ul>
+<li><p>Adaptive random-walk Metropolis-Hastings (RWMH) block sampler (<code>type = 'RW_block'</code>) is computationally fast but may or may not mix well.</p></li>
+<li><p>One can use repeats of RWMH to push for more mixing.</p></li>
+<li><p>Automated Factor Slice Sampler (AFSS) (<code>type = 'AF_slice'</code>) is computationally slower but should create better mixing.</p></li>
+</ul></li>
+</ul>
+</div>
+<div id="think-about-shared-computation-in-the-graph" class="slide section level1">
+<h1>Think about shared computation in the graph</h1>
+<ul>
+<li><p>Coefficients in linear predictors by definition share graph dependencies (or &quot;descendents&quot; or &quot;children&quot;).</p></li>
+<li><p>By sampling them jointly with one of the block sampling strategies, we can save computations.</p></li>
+</ul>
+</div>
+<div id="think-about-the-latent-states" class="slide section level1">
+<h1>Think about the latent states</h1>
+<ul>
+<li><p>Sampling the discrete latent states common to population models raises special challenges.</p></li>
+<li><p>By default, NIMBLE and JAGS (IIUC) use slice samplers for Poisson-distributed variables.</p></li>
+<li><p>Later, we can try writing a new sampler for these latent states.</p></li>
+</ul>
+</div>
+<div id="exercise-compare-some-sampling-strategies" class="slide section level1">
+<h1>Exercise: compare some sampling strategies</h1>
+<p>Use NIMBLE to compare the following strategies:</p>
+<ul>
+<li>JAGS</li>
+<li>NIMBLE with default samplers</li>
+<li>NIMBLE with slice samplers on all nodes</li>
+<li><p>NIMBLE with the following customization:</p>
+<ul>
+<li><code>AF_slice</code> samplers on each pair of coefficients that enter the same linear predictor (e.g. <code>alpha0[1]</code> and <code>alpha1[1]</code>, <code>beta0[1]</code> and <code>beta1[1]</code>, etc.).</li>
+</ul></li>
+</ul>
+</div>
+</body>
+</html>

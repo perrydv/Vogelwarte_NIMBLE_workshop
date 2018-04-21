@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Vogelwarte NIMBLE workshop: Day 1</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Vogelwarte NIMBLE workshop: Day 1</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="organization-of-workshop-and-materials" class="slide section level1">
+<h1>Organization of workshop and materials</h1>
+<ul>
+<li><a href="../administrative_stuff/administrative_stuff_slides.html">Organization</a></li>
+</ul>
+</div>
+<div id="getting-started-with-nimble" class="slide section level1">
+<h1>Getting started with NIMBLE</h1>
+<ul>
+<li><a href="../introduction_to_NIMBLE/introduction_to_NIMBLE_slides.html">Introduction to NIMBLE</a></li>
+<li><a href="../nimble_dialect_of_BUGS/nimble_dialect_of_BUGS_slides.html">NIMBLE's dialect of BUGS modeling language</a></li>
+<li><a href="../converting_jags_bugs_to_nimble/converting_jags_bugs_to_nimble_slides.html">Converting existing models and data from JAGS or BUGS to NIMBLE</a></li>
+<li><p><a href="../using_nimble_models/using_nimble_models_slides.html">Introduction to using NIMBLE models</a></p></li>
+<li><p>Understanding variables, nodes, and lifted nodes</p></li>
+<li><p><a href="../exercise_converting_jags_bugs_to_nimble/exercise_converting_jags_bugs_to_nimble_slides.html">Exercise: Convert N-mixture model from JAGS to NIMBLE</a>.</p>
+<ul>
+<li>Code is <a href="../exercise_converting_jags_bugs_to_nimble/exercise_converting_jags_bugs_to_nimble.R">here</a>.</li>
+</ul></li>
+</ul>
+</div>
+<div id="mcmc-in-nimble" class="slide section level1">
+<h1>MCMC in NIMBLE</h1>
+<ul>
+<li>Introduction to customizing MCMC in NIMBLE</li>
+<li><a href="../how_we_compare_mcmc_performance/how_we_compare_mcmc_performance_slides.html">How we compare MCMC performance</a></li>
+<li><a href="../introduction_to_compareMCMCs/introduction_to_compareMCMCs_slides.html">NIMBLE's compareMCMCs and MCMCsuite functions</a></li>
+<li><a href="../strategies_for_improving_mcmc/strategies_for_improving_mcmc_slides.html">Strategies for improving MCMC</a></li>
+<li><p><a href="../Nmixture_block_sampling_coefs/Nmixture_block_sampling_coefs_slides.html">Exercise: Nmixture model with coefficients</a></p>
+<ul>
+<li>Code is <a href="../exercise_converting_jags_bugs_to_nimble/exercise_converting_jags_bugs_to_nimble.R">here</a>.</li>
+</ul></li>
+<li>Worked example: Nmixture model for Swiss Great Tits</li>
+<li><p>NIMBLE's automatic blocking system</p></li>
+</ul>
+</div>
+<div id="programming-in-nimble" class="slide section level1">
+<h1>Programming in NIMBLE</h1>
+<ul>
+<li><a href="../why_program_in_nimble/why_program_in_nimble_slides.html">Why program in NIMBLE?</a></li>
+<li><a href="../introduction_to_nimbleFunctions/introduction_to_nimbleFunctions_slides.html">Introduction to nimbleFunctions</a></li>
+<li><a href="../introduction_nimble_compiler/introduction_nimble_compiler_slides.html">The NIMBLE compiler</a></li>
+<li><a href="../nimble_language/nimble_language_slides.html">The NIMBLE language: What is supported for compilation?</a></li>
+</ul>
+</div>
+<div id="writing-new-model-functions-and-distributions" class="slide section level1">
+<h1>Writing new model functions and distributions</h1>
+<ul>
+<li><a href="../capture_recapture_CJS_distribution/capture_recapture_CJS_distribution_slides.html">Cormack-Jolly-Seber as a distribution</a></li>
+<li><a href="../exercise_occupancy_distribution/exercise_occupancy_distribution_slides.html">Exercise: Occupancy as a distribution</a></li>
+<li>Multi-state capture-recapture as a Hidden Markov Model distribution</li>
+<li>[Exercise: Zero-inflated Poisson]</li>
+</ul>
+</div>
+<div id="programming-with-models-in-nimble" class="slide section level1">
+<h1>Programming with models in NIMBLE</h1>
+<ul>
+<li><a href="../programming_with_models/programming_with_models_slides.html">Programming with models: A likelihood calculator</a></li>
+<li><a href="../programming_data_simulator/programming_data_simulator_slides.html">Programming with models: A data simulator</a></li>
+<li><a href="../programming_project/programming_project_slides.html">Compiling in multiple steps: The NIMBLE project</a></li>
+</ul>
+</div>
+<div id="writing-new-mcmc-samplers" class="slide section level1">
+<h1>Writing new MCMC samplers</h1>
+<ul>
+<li>Introduction to MCMC samplers in NIMBLE</li>
+<li>Exercise:</li>
+<li>Exercise: Discrete random-walk sampler for latent population sizes</li>
+<li>Reversible jump for model selection</li>
+<li>Reversible jump for data augmentation</li>
+</ul>
+</div>
+<div id="other-algorithms-in-nimble" class="slide section level1">
+<h1>Other algorithms in NIMBLE</h1>
+</div>
+</body>
+</html>

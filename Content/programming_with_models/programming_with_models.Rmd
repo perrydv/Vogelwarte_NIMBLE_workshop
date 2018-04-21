@@ -1,0 +1,30 @@
+---
+title: "Programming with models"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+```
+
+# Model-generic programming
+
+- We often want to write code that will work for any model.
+
+    - It is also reasonable to write code for a specific model.
+
+- The NIMBLE language has additional features for using model.
+- All querying of model nodes, variables, and relationships **must** be done in `setup` code.
+- Common design:
+
+    - `setup` takes model and/or nodes as arguments.
+    - `setup` queries the model to set up nodes needed in `run` code.
+    - `run` code uses `calculate`, `simulate`, `values`, etc. (model-control features) with sets of nodes created in `setup`.
+
+# Example: 

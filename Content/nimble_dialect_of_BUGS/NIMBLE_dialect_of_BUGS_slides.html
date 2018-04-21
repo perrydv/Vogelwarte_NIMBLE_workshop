@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>How NIMBLE's model language differs from BUGS and JAGS</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">How NIMBLE's model language differs from BUGS and JAGS</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="how-nimble-is-the-same-as-bugs-and-jags" class="slide section level1">
+<h1>How NIMBLE is the same as BUGS and JAGS</h1>
+<ul>
+<li><p>Most distributions and functions are supported</p>
+<ul>
+<li>For distributions, see <a href="../NimbleUserManual.pdf#page=38">User Manual Section 5.2.4</a></li>
+<li>For function, see <a href="../NimbleUserManual.pdf#page=43">User Manual Section 5.2.5</a></li>
+</ul></li>
+<li><p>Most syntax is supported</p>
+<ul>
+<li>Truncation syntax is different when using <code>nimbleCode</code>. (It can be the same as for JAGS if reading code from a file with <code>readBUGSmodel</code>).</li>
+</ul></li>
+</ul>
+</div>
+<div id="how-nimble-extends-bugs" class="slide section level1">
+<h1>How NIMBLE extends BUGS</h1>
+<ul>
+<li>Alternative distribution parameterizations (like R).</li>
+<li>Named parameters (like R).</li>
+<li>Vectorized math and linear algebra</li>
+<li>Definition-time if-then-else (multiple model variants from the same code)</li>
+<li>User-defined functions and distributions</li>
+</ul>
+<h3 id="how-nimble-is-limited-compared-to-bugs-andor-jags">How NIMBLE is limited compared to BUGS and/or JAGS:</h3>
+<ul>
+<li>NIMBLE is stricter about requiring square brackets and informative indices for non-scalar nodes.</li>
+</ul>
+</div>
+<div id="r-like-alternative-and-named-parameters" class="slide section level1">
+<h1>R-like alternative and named parameters</h1>
+<p>Note named parameters in distributions</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pumpCode &lt;-<span class="st"> </span><span class="kw">nimbleCode</span>({ 
+  for (i in <span class="dv">1</span>:N){
+
+      <span class="co"># likelihood (data model)</span>
+      x[i] ~<span class="st"> </span><span class="kw">dpois</span>(<span class="dt">lambda =</span> lambda[i])
+
+      <span class="co"># latent process (random effects)</span>
+      <span class="co"># linear predictor      </span>
+      lambda[i] &lt;-<span class="st"> </span>theta[i]*t[i]
+      <span class="co"># random effects distribution</span>
+      theta[i] ~<span class="st"> </span><span class="kw">dgamma</span>(<span class="dt">shape =</span> alpha, <span class="dt">rate =</span> beta)
+  }
+  <span class="co"># priors on hyperparameters</span>
+  alpha ~<span class="st"> </span><span class="kw">dexp</span>(<span class="dt">rate =</span> <span class="fl">1.0</span>)
+  beta ~<span class="st"> </span><span class="kw">dgamma</span>(<span class="dt">share =</span> <span class="fl">0.1</span>, <span class="dt">rate =</span> <span class="fl">1.0</span>)
+})</code></pre></div>
+</div>
+<div id="extensibility-new-functions-and-distributions" class="slide section level1">
+<h1>Extensibility: new functions and distributions</h1>
+<p>We will cover this in depth later.</p>
+</div>
+<div id="distinction-between-data-and-constants" class="slide section level1">
+<h1>Distinction between data and constants</h1>
+<ul>
+<li><p>Constants must be provided to <code>nimbleModel</code></p>
+<ul>
+<li><p>Constants are values needed to define model relationships</p>
+<ul>
+<li>Index ranges like <code>N</code></li>
+<li>Constant indexing vectors</li>
+</ul></li>
+</ul></li>
+<li><p>Data can be provided to <code>nimbleModel</code> or later</p>
+<ul>
+<li><p>Data represents a flag on the role nodes play in the model</p>
+<ul>
+<li>e.g. Data nodes shouldn't be sampled</li>
+</ul></li>
+<li><p>Data values can be changed.</p></li>
+</ul></li>
+</ul>
+<p>Example</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">isData</span>(<span class="st">&#39;x&#39;</span>)</code></pre></div>
+<pre><code>##  [1] TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">isData</span>(<span class="st">&#39;lambda&#39;</span>)</code></pre></div>
+<pre><code>##  [1] FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$x</code></pre></div>
+<pre><code>##  [1]  5  1  5 14  3 19  1  1  4 22</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$x[<span class="dv">3</span>] &lt;-<span class="st"> </span><span class="dv">4</span>
+pump$x</code></pre></div>
+<pre><code>##  [1]  5  1  4 14  3 19  1  1  4 22</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">simulate</span>(<span class="st">&#39;x&#39;</span>, <span class="dt">includeData =</span> <span class="ot">TRUE</span>)
+pump$x</code></pre></div>
+<pre><code>##  [1]  7  0  8 18  0  2  0  0  0  3</code></pre>
+<ul>
+<li>NIMBLE will usually disambiguate data when it is provided as constants.</li>
+</ul>
+</div>
+<div id="more-explicit-need-to-provide-dimensions" class="slide section level1">
+<h1>More explicit need to provide dimensions</h1>
+<ul>
+<li><p>Square brackets must always be provided to indicate number of dimensions</p>
+<ul>
+<li>If <code>x</code> is 2-dimensional, use <code>x[,] %*% beta[]</code>, not <code>x %*% beta</code></li>
+</ul></li>
+<li><p>Sometimes NIMBLE is not as smart as BUGS/JAGS at determining dimensions. There are two solutions:</p>
+<ul>
+<li>Give dimensions explicity: <code>x[1:n, 1:m]</code>, OR</li>
+<li>Provide a <code>dimensions</code> argument to <code>nimbleModel</code>. Example: <code>dimensions = list(x = c(n, m))</code>.</li>
+</ul></li>
+</ul>
+</div>
+<div id="vectorized-math-and-linear-algebra" class="slide section level1">
+<h1>Vectorized math and linear algebra</h1>
+<p>Instead of writing this in your model code:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">nimbleOptions</span>(<span class="dt">verbose =</span> <span class="ot">FALSE</span>)
+m1 &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(
+    <span class="kw">nimbleCode</span>({
+        for(i in <span class="dv">1</span>:<span class="dv">5</span>) {
+            predicted[i] &lt;-<span class="st"> </span>beta0 +<span class="st"> </span>beta1 *<span class="st"> </span>x[i]
+        }
+    }
+    ))</code></pre></div>
+<p>you can write this:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">m2 &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(
+    <span class="kw">nimbleCode</span>({
+        predicted[<span class="dv">1</span>:<span class="dv">5</span>] &lt;-<span class="st"> </span>beta0 +<span class="st"> </span>beta1 *<span class="st"> </span>x[<span class="dv">1</span>:<span class="dv">5</span>]
+    }
+    ))</code></pre></div>
+<p>These are not equivalent:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## m1 has 5 scalar nodes
+m1$<span class="kw">getNodeNames</span>()</code></pre></div>
+<pre><code>## [1] &quot;predicted[1]&quot; &quot;predicted[2]&quot; &quot;predicted[3]&quot; &quot;predicted[4]&quot;
+## [5] &quot;predicted[5]&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## m2 has 1 vector node
+m2$<span class="kw">getNodeNames</span>()</code></pre></div>
+<pre><code>## [1] &quot;predicted[1:5]&quot;</code></pre>
+<p>One is not necessarily better than the other. It depends on the model and the MCMC configuration. (More on those topics later.)</p>
+<p>Vectorized declarations do not work for distributions.</p>
+<p>Discussion topic for breaks:</p>
+<ul>
+<li>Would vectorized distribution declarations be helpful?</li>
+<li>How should they be defined?</li>
+</ul>
+</div>
+<div id="definition-time-if-then-else" class="slide section level1">
+<h1>Definition-time if-then-else</h1>
+<p>If you wish to define multiple alternative models in one set of code, you can use if-then-else statements. These will be evaluated based on variables in the R environment when the model is defined. For example:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">code &lt;-<span class="st"> </span><span class="kw">nimbleCode</span>({
+    sigma ~<span class="st"> </span><span class="kw">dunif</span>(<span class="dv">0</span>, <span class="dv">10</span>)
+    beta0 ~<span class="st"> </span><span class="kw">dnorm</span>(<span class="dv">0</span>, <span class="dt">sd =</span> <span class="dv">1000</span>)
+    beta1 ~<span class="st"> </span><span class="kw">dnorm</span>(<span class="dv">0</span>, <span class="dt">sd =</span> <span class="dv">1000</span>)
+    if(INCLUDE_X2) {beta2 ~<span class="st"> </span><span class="kw">dnorm</span>(<span class="dv">0</span>, <span class="dt">sd =</span> <span class="dv">1000</span>)} else{}
+    for(i in <span class="dv">1</span>:<span class="dv">10</span>) {
+        if(INCLUDE_X2) {
+            y[i] ~<span class="st"> </span><span class="kw">dnorm</span>(beta0 +<span class="st"> </span>beta1 *<span class="st"> </span>x1[i] +<span class="st"> </span>beta2 *<span class="st"> </span>x2[i], <span class="dt">sd =</span> sigma)
+        } else {
+            y[i] ~<span class="st"> </span><span class="kw">dnorm</span>(beta0 +<span class="st"> </span>beta1 *<span class="st"> </span>x1[i], <span class="dt">sd =</span> sigma)
+        }
+    }
+})
+
+INCLUDE_X2 &lt;-<span class="st"> </span><span class="ot">FALSE</span>
+m1 &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(code)
+INCLUDE_X2 &lt;-<span class="st"> </span><span class="ot">TRUE</span>
+m2 &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(code)
+m1$<span class="kw">getNodeNames</span>()</code></pre></div>
+<pre><code>##  [1] &quot;sigma&quot;                                         
+##  [2] &quot;beta0&quot;                                         
+##  [3] &quot;beta1&quot;                                         
+##  [4] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_L6[1]&quot; 
+##  [5] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_L6[2]&quot; 
+##  [6] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_L6[3]&quot; 
+##  [7] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_L6[4]&quot; 
+##  [8] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_L6[5]&quot; 
+##  [9] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_L6[6]&quot; 
+## [10] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_L6[7]&quot; 
+## [11] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_L6[8]&quot; 
+## [12] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_L6[9]&quot; 
+## [13] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_L6[10]&quot;
+## [14] &quot;y[1]&quot;                                          
+## [15] &quot;y[2]&quot;                                          
+## [16] &quot;y[3]&quot;                                          
+## [17] &quot;y[4]&quot;                                          
+## [18] &quot;y[5]&quot;                                          
+## [19] &quot;y[6]&quot;                                          
+## [20] &quot;y[7]&quot;                                          
+## [21] &quot;y[8]&quot;                                          
+## [22] &quot;y[9]&quot;                                          
+## [23] &quot;y[10]&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">m2$<span class="kw">getNodeNames</span>()</code></pre></div>
+<pre><code>##  [1] &quot;sigma&quot;                                                                    
+##  [2] &quot;beta0&quot;                                                                    
+##  [3] &quot;beta1&quot;                                                                    
+##  [4] &quot;beta2&quot;                                                                    
+##  [5] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_plus_beta2_times_x2_oBi_cB_L8[1]&quot; 
+##  [6] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_plus_beta2_times_x2_oBi_cB_L8[2]&quot; 
+##  [7] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_plus_beta2_times_x2_oBi_cB_L8[3]&quot; 
+##  [8] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_plus_beta2_times_x2_oBi_cB_L8[4]&quot; 
+##  [9] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_plus_beta2_times_x2_oBi_cB_L8[5]&quot; 
+## [10] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_plus_beta2_times_x2_oBi_cB_L8[6]&quot; 
+## [11] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_plus_beta2_times_x2_oBi_cB_L8[7]&quot; 
+## [12] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_plus_beta2_times_x2_oBi_cB_L8[8]&quot; 
+## [13] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_plus_beta2_times_x2_oBi_cB_L8[9]&quot; 
+## [14] &quot;lifted_beta0_plus_beta1_times_x1_oBi_cB_plus_beta2_times_x2_oBi_cB_L8[10]&quot;
+## [15] &quot;y[1]&quot;                                                                     
+## [16] &quot;y[2]&quot;                                                                     
+## [17] &quot;y[3]&quot;                                                                     
+## [18] &quot;y[4]&quot;                                                                     
+## [19] &quot;y[5]&quot;                                                                     
+## [20] &quot;y[6]&quot;                                                                     
+## [21] &quot;y[7]&quot;                                                                     
+## [22] &quot;y[8]&quot;                                                                     
+## [23] &quot;y[9]&quot;                                                                     
+## [24] &quot;y[10]&quot;</code></pre>
+<p>m2 has <code>beta2</code> while m1 does not. The long names are &quot;lifted nodes&quot; -- more on those later.</p>
+<p>Discussion topic for breaks:</p>
+<ul>
+<li>What would be a more useful system for writing model variants within one block of code?</li>
+</ul>
+</div>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley (with thanks to Lauren Ponisio)" />
+  <title>Converting from JAGS to NIMBLE</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_CHTML-full" type="text/javascript"></script>
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Converting from JAGS to NIMBLE</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley (with thanks to Lauren Ponisio)
+  </p>
+</div>
+<div id="steps" class="slide section level1">
+<h1>Steps</h1>
+<ol style="list-style-type: decimal">
+<li><p>Wrap your JAGS/BUGS model code in <code>nimbleCode({})</code>, directly in R.</p>
+<ul>
+<li><p>This replaces the step of writing or generating a file containing the model code.</p></li>
+<li><p>Alternatively, you can read JAGS- and BUGS-formatted code and data files using <code>readBUGSmodel</code>.</p></li>
+</ul></li>
+<li><p>Provide information about missing or empty indices.</p>
+<ul>
+<li>Example: If <code>x</code> is a matrix, you must write at least <code>x[,]</code> to show it has two dimensions.</li>
+<li>If other declarations make the size of <code>x</code> clear, <code>x[,]</code> will work.</li>
+<li>If not, either provide index ranges (e.g. <code>x[1:n, 1:m]</code>) or use the <code>dimensions</code> argument to <code>nimbleModel</code>.</li>
+</ul></li>
+<li><p>Convert any use of truncation syntax</p>
+<ul>
+<li><p>e.g. <code>x ~ dnorm(0, tau) T(a, b)</code> <span class="math inline">\(\rightarrow\)</span> <code>x ~ T(dnorm(0, tau), a, b)</code>.</p></li>
+<li><p>If reading model code from a file using <code>readBUGSmodel</code>, the BUGS/JAGS truncation notation will work.</p></li>
+</ul></li>
+<li><p>Split the <code>data</code> for BUGS/JAGS into <code>data</code> and <code>constants</code> for NIMBLE.</p>
+<ul>
+<li>Constants are necessary to define the model, such as <code>nsite</code> in <code>for(i in 1:nsite) {...}</code>.</li>
+<li>Data are observed values of some variables.</li>
+<li>Alternatively, one can provide a list of both constants and data for the <code>constants</code> argument to <code>nimbleModel</code>, and NIMBLE will try to determine which is which.</li>
+</ul></li>
+<li><p>When using <code>nimbleModel</code>, convert <code>inits</code> and <code>monitors</code> inputs from functions to named lists.</p>
+<ul>
+<li>When using <code>nimbleMCMC</code>, <code>inits</code> can be a function, e.g. as in R packages for jags.</li>
+</ul></li>
+<li><p>In some cases, NIMBLE needs more complete <code>inits</code> than JAGS or possibly BUGS.</p>
+<ul>
+<li>In a model with stochastic indices, those indices should have <code>inits</code> values.</li>
+</ul></li>
+<li><p>To run an MCMC on your model, you have two choices:</p>
+<ul>
+<li><p>Use <code>nimbleMCMC()</code> much like a call to <code>jags()</code> from the <code>R2jags</code> package. This will take all steps to set up and run an MCMC using NIMBLE's default configuration.</p></li>
+<li><p>To use NIMBLE's full flexibiilty, build the model, configure and build the MCMC, and compile both the model and MCMC. Then run the MCMC either directly or using <code>runMCMC</code>.</p></li>
+</ul></li>
+</ol>
+</div>
+</body>
+</html>

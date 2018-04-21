@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley (with thanks to Lauren Ponisio)" />
+  <title>Converting from JAGS to NIMBLE: Exercise</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Converting from JAGS to NIMBLE: Exercise</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley (with thanks to Lauren Ponisio)
+  </p>
+</div>
+<div class="slide section level1">
+
+<p>We will use the N-mixture model from Chapter 10, Section 10.4 of Applied Hierarchical Modeling as an example.</p>
+<h4 id="brief-summary-of-the-model">Brief summary of the model</h4>
+<ul>
+<li>It is a simulated example.</li>
+<li><code>M</code> = 100 sites.</li>
+<li><code>C[i, j]</code> is the count from visit <code>j</code> to site <code>i</code>.</li>
+<li>Each site has latent true abundance <code>N[i]</code>.</li>
+<li>Expected abundance depends on <code>vegHt</code>.</li>
+<li>Detection probability depends on <code>wind</code>.</li>
+</ul>
+<p>The code is provided below in three sections.</p>
+</div>
+<div id="set-up-model-variables-and-make-some-plots." class="slide section level1">
+<h1>Set up model variables and make some plots.</h1>
+<p>The first section that sets up the model variables and makes some plots. You should be able to run directly through this.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## Original code from Section 6.4 for AHM
+
+<span class="co"># 6.4 A slightly more complex N-mixture model with covariates</span>
+<span class="co"># ------------------------------------------------------------------------</span>
+
+<span class="co"># Choose sample sizes and prepare obs. data array y</span>
+<span class="kw">set.seed</span>(<span class="dv">1</span>)                   <span class="co"># So we all get same data set</span>
+M &lt;-<span class="st"> </span><span class="dv">100</span>                      <span class="co"># Number of sites</span>
+J &lt;-<span class="st"> </span><span class="dv">3</span>                        <span class="co"># Number of repeated abundance measurements</span>
+C &lt;-<span class="st"> </span><span class="kw">matrix</span>(<span class="ot">NA</span>, <span class="dt">nrow =</span> M, <span class="dt">ncol =</span> J) <span class="co"># to contain the observed data</span>
+
+<span class="co"># Create a covariate called vegHt</span>
+vegHt &lt;-<span class="st"> </span><span class="kw">sort</span>(<span class="kw">runif</span>(M, -<span class="dv">1</span>, <span class="dv">1</span>)) <span class="co"># sort for graphical convenience</span>
+
+<span class="co"># Choose parameter values for abundance model and compute lambda</span>
+beta0 &lt;-<span class="st"> </span><span class="dv">0</span>                    <span class="co"># Log-scale intercept</span>
+beta1 &lt;-<span class="st"> </span><span class="dv">2</span>                    <span class="co"># Log-scale slope for vegHt</span>
+lambda &lt;-<span class="st"> </span><span class="kw">exp</span>(beta0 +<span class="st"> </span>beta1 *<span class="st"> </span>vegHt) <span class="co"># Expected abundance</span>
+<span class="kw">plot</span>(vegHt, lambda, <span class="dt">type =</span> <span class="st">&quot;l&quot;</span>, <span class="dt">lwd =</span> <span class="dv">3</span>)  <span class="co"># Expected abundance</span>
+
+<span class="co"># Draw local abundance and look at data so far</span>
+N &lt;-<span class="st"> </span><span class="kw">rpois</span>(M, lambda)
+<span class="kw">points</span>(vegHt, N)              <span class="co"># Add realized abundance to plot</span></code></pre></div>
+<div class="figure">
+<img src="figure/setup-section-1.png" alt="plot of chunk setup-section" />
+<p class="caption">plot of chunk setup-section</p>
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">table</span>(N)</code></pre></div>
+<pre><code>## N
+##  0  1  2  3  4  5  6  8  9 
+## 35 24 12  7  9  5  4  3  1</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># Plot the true system state (Fig. left)</span>
+<span class="kw">par</span>(<span class="dt">mfrow =</span> <span class="kw">c</span>(<span class="dv">1</span>, <span class="dv">3</span>), <span class="dt">mar =</span> <span class="kw">c</span>(<span class="dv">5</span>,<span class="dv">5</span>,<span class="dv">2</span>,<span class="dv">2</span>), <span class="dt">cex.axis =</span> <span class="fl">1.5</span>, <span class="dt">cex.lab =</span> <span class="fl">1.5</span>)
+<span class="kw">plot</span>(vegHt, N, <span class="dt">xlab=</span><span class="st">&quot;Vegetation height&quot;</span>, <span class="dt">ylab=</span><span class="st">&quot;True abundance (N)&quot;</span>, <span class="dt">frame =</span> F, <span class="dt">cex =</span> <span class="fl">1.5</span>)
+<span class="kw">lines</span>(<span class="kw">seq</span>(-<span class="dv">1</span>,<span class="dv">1</span>,,<span class="dv">100</span>), <span class="kw">exp</span>(beta0 +<span class="st"> </span>beta1*<span class="st"> </span><span class="kw">seq</span>(-<span class="dv">1</span>,<span class="dv">1</span>,,<span class="dv">100</span>)), <span class="dt">lwd=</span><span class="dv">3</span>, <span class="dt">col =</span> <span class="st">&quot;red&quot;</span>)
+
+
+<span class="co"># Create a covariate called wind</span>
+wind &lt;-<span class="st"> </span><span class="kw">array</span>(<span class="kw">runif</span>(M *<span class="st"> </span>J, -<span class="dv">1</span>, <span class="dv">1</span>), <span class="dt">dim =</span> <span class="kw">c</span>(M, J))
+
+<span class="co"># Choose parameter values for measurement error model and compute detectability</span>
+alpha0 &lt;-<span class="st"> </span>-<span class="dv">2</span>                        <span class="co"># Logit-scale intercept</span>
+alpha1 &lt;-<span class="st"> </span>-<span class="dv">3</span>                        <span class="co"># Logit-scale slope for wind</span>
+p &lt;-<span class="st"> </span><span class="kw">plogis</span>(alpha0 +<span class="st"> </span>alpha1 *<span class="st"> </span>wind) <span class="co"># Detection probability</span>
+<span class="co">#plot(p ~ wind, ylim = c(0,1))       # Look at relationship</span>
+
+<span class="co"># Take J = 3 abundance measurements at each site</span>
+for(j in <span class="dv">1</span>:J) {
+    C[,j] &lt;-<span class="st"> </span><span class="kw">rbinom</span>(M, N, p[,j])
+}
+
+<span class="co"># Plot observed data and effect of wind on det. probability (Fig. middle)</span>
+<span class="kw">plot</span>(wind, C/<span class="kw">max</span>(C), <span class="dt">xlab=</span><span class="st">&quot;Wind&quot;</span>, <span class="dt">ylab=</span><span class="st">&quot;Scaled counts: C/max(C)&quot;</span>, <span class="dt">frame =</span> F, <span class="dt">cex =</span> <span class="fl">1.5</span>)
+<span class="kw">lines</span>(<span class="kw">seq</span>(-<span class="dv">1</span>,<span class="dv">1</span>,,<span class="dv">100</span>), <span class="kw">plogis</span>(alpha0 +<span class="st"> </span>alpha1*<span class="kw">seq</span>(-<span class="dv">1</span>,<span class="dv">1</span>,,<span class="dv">100</span>)), <span class="dt">lwd=</span><span class="dv">3</span>, <span class="dt">col=</span><span class="st">&quot;red&quot;</span>)
+
+
+<span class="co"># Expected (lambda) and realized abundance (N) and measurements (C)</span>
+<span class="kw">cbind</span>(<span class="dt">lambda=</span><span class="kw">round</span>(lambda,<span class="dv">2</span>), <span class="dt">N=</span>N, <span class="dt">C1=</span>C[,<span class="dv">1</span>], <span class="dt">C2=</span>C[,<span class="dv">2</span>], <span class="dt">C3=</span>C[,<span class="dv">3</span>])</code></pre></div>
+<pre><code>##        lambda N C1 C2 C3
+##   [1,]   0.14 0  0  0  0
+##   [2,]   0.15 0  0  0  0
+##   [3,]   0.17 0  0  0  0
+##   [4,]   0.17 2  1  0  0
+##   [5,]   0.18 0  0  0  0
+##   [6,]   0.19 0  0  0  0
+##   [7,]   0.20 0  0  0  0
+##   [8,]   0.21 0  0  0  0
+##   [9,]   0.22 1  1  1  1
+##  [10,]   0.22 0  0  0  0
+##  [11,]   0.24 2  0  1  0
+##  [12,]   0.27 0  0  0  0
+##  [13,]   0.29 0  0  0  0
+##  [14,]   0.30 0  0  0  0
+##  [15,]   0.30 0  0  0  0
+##  [16,]   0.31 0  0  0  0
+##  [17,]   0.32 0  0  0  0
+##  [18,]   0.35 0  0  0  0
+##  [19,]   0.36 0  0  0  0
+##  [20,]   0.36 0  0  0  0
+##  [21,]   0.38 2  1  0  1
+##  [22,]   0.39 0  0  0  0
+##  [23,]   0.39 0  0  0  0
+##  [24,]   0.44 0  0  0  0
+##  [25,]   0.48 1  0  0  0
+##  [26,]   0.50 0  0  0  0
+##  [27,]   0.51 0  0  0  0
+##  [28,]   0.51 0  0  0  0
+##  [29,]   0.53 0  0  0  0
+##  [30,]   0.53 1  0  0  0
+##  [31,]   0.54 0  0  0  0
+##  [32,]   0.60 0  0  0  0
+##  [33,]   0.62 0  0  0  0
+##  [34,]   0.62 1  0  0  0
+##  [35,]   0.63 2  1  2  2
+##  [36,]   0.63 1  0  0  0
+##  [37,]   0.64 1  0  0  0
+##  [38,]   0.67 1  0  0  0
+##  [39,]   0.69 3  0  0  0
+##  [40,]   0.70 1  0  0  0
+##  [41,]   0.70 1  1  0  1
+##  [42,]   0.77 1  0  1  1
+##  [43,]   0.78 0  0  0  0
+##  [44,]   0.84 0  0  0  0
+##  [45,]   0.85 1  0  0  0
+##  [46,]   0.91 1  1  1  0
+##  [47,]   0.91 0  0  0  0
+##  [48,]   0.91 1  1  1  0
+##  [49,]   0.92 0  0  0  0
+##  [50,]   0.93 2  0  0  1
+##  [51,]   0.97 1  0  0  0
+##  [52,]   0.99 1  0  1  0
+##  [53,]   1.08 0  0  0  0
+##  [54,]   1.13 1  0  0  1
+##  [55,]   1.24 1  0  0  1
+##  [56,]   1.34 0  0  0  0
+##  [57,]   1.49 1  0  0  0
+##  [58,]   1.52 0  0  0  0
+##  [59,]   1.68 1  0  0  0
+##  [60,]   1.77 1  0  0  1
+##  [61,]   1.80 1  0  1  1
+##  [62,]   1.83 4  2  2  1
+##  [63,]   1.83 1  1  0  0
+##  [64,]   1.90 3  1  2  1
+##  [65,]   1.91 4  0  0  1
+##  [66,]   1.96 1  1  0  0
+##  [67,]   2.11 0  0  0  0
+##  [68,]   2.16 1  0  0  1
+##  [69,]   2.33 3  0  0  0
+##  [70,]   2.34 2  0  0  0
+##  [71,]   2.39 3  3  1  0
+##  [72,]   2.45 4  3  1  0
+##  [73,]   2.53 4  0  0  0
+##  [74,]   2.80 2  0  1  0
+##  [75,]   2.90 2  1  2  1
+##  [76,]   2.94 5  2  3  3
+##  [77,]   3.03 4  3  1  0
+##  [78,]   3.03 4  2  0  1
+##  [79,]   3.05 3  0  3  0
+##  [80,]   3.10 5  0  0  0
+##  [81,]   3.18 2  2  1  0
+##  [82,]   3.24 2  2  0  1
+##  [83,]   3.28 6  0  0  0
+##  [84,]   3.47 3  1  0  0
+##  [85,]   3.61 6  3  3  0
+##  [86,]   3.70 2  0  1  0
+##  [87,]   3.89 5  2  0  3
+##  [88,]   4.24 5  5  0  5
+##  [89,]   4.29 8  3  4  0
+##  [90,]   4.39 4  2  0  2
+##  [91,]   4.49 6  2  2  4
+##  [92,]   4.50 4  3  3  0
+##  [93,]   4.80 2  0  0  0
+##  [94,]   4.92 8  3  0  7
+##  [95,]   5.12 4  1  3  2
+##  [96,]   5.21 6  0  2  0
+##  [97,]   5.69 3  3  0  0
+##  [98,]   5.92 8  5  3  2
+##  [99,]   6.31 5  3  1  0
+## [100,]   7.15 9  0  2  6</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># Create factors</span>
+time &lt;-<span class="st"> </span><span class="kw">matrix</span>(<span class="kw">rep</span>(<span class="kw">as.character</span>(<span class="dv">1</span>:J), M), <span class="dt">ncol =</span> J, <span class="dt">byrow =</span> <span class="ot">TRUE</span>)
+hab &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="kw">rep</span>(<span class="st">&quot;A&quot;</span>, <span class="dv">33</span>), <span class="kw">rep</span>(<span class="st">&quot;B&quot;</span>, <span class="dv">33</span>), <span class="kw">rep</span>(<span class="st">&quot;C&quot;</span>, <span class="dv">34</span>))  <span class="co"># assumes M = 100</span>
+
+## A section of original code for creating book figures has been removed here.
+
+<span class="co"># Bundle data</span>
+win.data &lt;-<span class="st"> </span><span class="kw">list</span>(<span class="dt">C =</span> C, <span class="dt">M =</span> <span class="kw">nrow</span>(C), <span class="dt">J =</span> <span class="kw">ncol</span>(C), <span class="dt">wind =</span> wind, <span class="dt">vegHt =</span> vegHt, <span class="dt">hab =</span> <span class="kw">as.numeric</span>(<span class="kw">factor</span>(hab)), <span class="dt">XvegHt =</span> <span class="kw">seq</span>(-<span class="dv">1</span>, <span class="dv">1</span>,, <span class="dv">100</span>), <span class="dt">Xwind =</span> <span class="kw">seq</span>(-<span class="dv">1</span>, <span class="dv">1</span>,,<span class="dv">100</span>) )
+<span class="kw">str</span>(win.data)</code></pre></div>
+<pre><code>## List of 8
+##  $ C     : int [1:100, 1:3] 0 0 0 1 0 0 0 0 1 0 ...
+##  $ M     : int 100
+##  $ J     : int 3
+##  $ wind  : num [1:100, 1:3] -0.465 -0.5627 0.0336 -0.4621 -0.6377 ...
+##  $ vegHt : num [1:100] -0.973 -0.953 -0.882 -0.876 -0.859 ...
+##  $ hab   : num [1:100] 1 1 1 1 1 1 1 1 1 1 ...
+##  $ XvegHt: num [1:100] -1 -0.98 -0.96 -0.939 -0.919 ...
+##  $ Xwind : num [1:100] -1 -0.98 -0.96 -0.939 -0.919 ...</code></pre>
+<div class="figure">
+<img src="figure/setup-section-2.png" alt="plot of chunk setup-section" />
+<p class="caption">plot of chunk setup-section</p>
+</div>
+<p>Note the last line creates the list of data values for use in BUGS/JAGS/NIMBLE model.</p>
+<p>Some of the original book code was omitted.</p>
+</div>
+<div id="set-up-model-for-bugsjags" class="slide section level1">
+<h1>Set up model for BUGS/JAGS</h1>
+<p>This needs to be modified for use by NIMBLE.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># Specify model in BUGS language</span>
+<span class="kw">cat</span>(<span class="dt">file =</span> <span class="st">&quot;model2.txt&quot;</span>, <span class="st">&quot;</span>
+<span class="st">model {</span>
+<span class="st"># Priors</span>
+<span class="st">for(k in 1:3){                # Loop over 3 levels of hab or time factors</span>
+<span class="st">   alpha0[k] ~ dunif(-10, 10) # Detection intercepts</span>
+<span class="st">   alpha1[k] ~ dunif(-10, 10) # Detection slopes</span>
+<span class="st">   beta0[k] ~ dunif(-10, 10)  # Abundance intercepts</span>
+<span class="st">   beta1[k] ~ dunif(-10, 10)  # Abundance slopes</span>
+<span class="st">}</span>
+
+<span class="st"># Likelihood</span>
+<span class="st"># Ecological model for true abundance</span>
+<span class="st">for (i in 1:M){</span>
+<span class="st">   N[i] ~ dpois(lambda[i])</span>
+<span class="st">   log(lambda[i]) &lt;- beta0[hab[i]] + beta1[hab[i]] * vegHt[i]</span>
+<span class="st">   # Some intermediate derived quantities</span>
+<span class="st">   critical[i] &lt;- step(2-N[i])# yields 1 whenever N is 2 or less</span>
+<span class="st">   z[i] &lt;- step(N[i]-0.5)     # Indicator for occupied site</span>
+<span class="st">   # Observation model for replicated counts</span>
+<span class="st">   for (j in 1:J){</span>
+<span class="st">      C[i,j] ~ dbin(p[i,j], N[i])</span>
+<span class="st">      logit(p[i,j]) &lt;- alpha0[j] + alpha1[j] * wind[i,j]</span>
+<span class="st">   }</span>
+<span class="st">}</span>
+
+<span class="st"># Derived quantities</span>
+<span class="st">Nocc &lt;- sum(z[])         # Number of occupied sites among sample of M</span>
+<span class="st">Ntotal &lt;- sum(N[])       # Total population size at M sites combined</span>
+<span class="st">Nhab[1] &lt;- sum(N[1:33])  # Total abundance for sites in hab A</span>
+<span class="st">Nhab[2] &lt;- sum(N[34:66]) # Total abundance for sites in hab B</span>
+<span class="st">Nhab[3] &lt;- sum(N[67:100])# Total abundance for sites in hab C</span>
+<span class="st">for(k in 1:100){         # Predictions of lambda and p ...</span>
+<span class="st">   for(level in 1:3){    #    ... for each level of hab and time factors</span>
+<span class="st">      lam.pred[k, level] &lt;- exp(beta0[level] + beta1[level] * XvegHt[k])</span>
+<span class="st">      logit(p.pred[k, level]) &lt;- alpha0[level] + alpha1[level] * Xwind[k]</span>
+<span class="st">   }</span>
+<span class="st">}</span>
+<span class="st">N.critical &lt;- sum(critical[]) # Number of populations with critical size</span>
+<span class="st">}&quot;</span>)
+
+<span class="co"># Initial values</span>
+Nst &lt;-<span class="st"> </span><span class="kw">apply</span>(C, <span class="dv">1</span>, max)+<span class="dv">1</span>   <span class="co"># Important to give good inits for latent N</span>
+inits &lt;-<span class="st"> </span>function() <span class="kw">list</span>(<span class="dt">N =</span> Nst, <span class="dt">alpha0 =</span> <span class="kw">rnorm</span>(<span class="dv">3</span>), <span class="dt">alpha1 =</span> <span class="kw">rnorm</span>(<span class="dv">3</span>), <span class="dt">beta0 =</span> <span class="kw">rnorm</span>(<span class="dv">3</span>), <span class="dt">beta1 =</span> <span class="kw">rnorm</span>(<span class="dv">3</span>))
+
+<span class="co"># Parameters monitored</span>
+params &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;alpha0&quot;</span>, <span class="st">&quot;alpha1&quot;</span>, <span class="st">&quot;beta0&quot;</span>, <span class="st">&quot;beta1&quot;</span>, <span class="st">&quot;Nocc&quot;</span>, <span class="st">&quot;Ntotal&quot;</span>, <span class="st">&quot;Nhab&quot;</span>, <span class="st">&quot;N.critical&quot;</span>, <span class="st">&quot;lam.pred&quot;</span>, <span class="st">&quot;p.pred&quot;</span>) <span class="co"># could also estimate N, bayesian counterpart to BUPs before: simply add &quot;N&quot; to the list</span>
+
+<span class="co"># MCMC settings</span>
+nc &lt;-<span class="st"> </span><span class="dv">3</span>   ;   ni &lt;-<span class="st"> </span><span class="dv">22000</span>   ;   nb &lt;-<span class="st"> </span><span class="dv">2000</span>   ;   nt &lt;-<span class="st"> </span><span class="dv">10</span></code></pre></div>
+</div>
+<div id="run-an-mcmc" class="slide section level1">
+<h1>Run an MCMC</h1>
+<p>This needs to be modified to use NIMBLE</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># Call JAGS, time run (ART 1 min) and summarize posteriors</span>
+<span class="kw">system.time</span>(out &lt;-<span class="st"> </span><span class="kw">jags</span>(win.data, inits, params, <span class="st">&quot;model2.txt&quot;</span>, <span class="dt">n.chains =</span> nc,
+<span class="dt">n.thin =</span> nt, <span class="dt">n.iter =</span> ni, <span class="dt">n.burnin =</span> nb, <span class="dt">parallel =</span> <span class="ot">TRUE</span>)
+)</code></pre></div>
+</div>
+</body>
+</html>

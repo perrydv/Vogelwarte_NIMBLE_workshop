@@ -1,0 +1,2 @@
+# Tricks to make `nimbleModel` faster
+

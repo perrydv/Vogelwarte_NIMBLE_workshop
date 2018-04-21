@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>More about the NIMBLE language</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">More about the NIMBLE language</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div class="slide section level1">
+
+<p>In these slides we'll cover the modified subset of R that is supported for compilation.</p>
+<h2 id="what-does-modified-subset-of-r-mean">What does &quot;modified subset of R&quot; mean?</h2>
+<p>NIMBLE tries to mimic the arguments and behavior of a selected <strong>subset</strong> of R functions: mostly those needed for basic manipulations and math with numeric, integer, and logical objects.</p>
+<p>Sometimes NIMBLE needs slightly different arguments or behavior, so how functions work is <strong>modified</strong>.</p>
+</div>
+<div id="finding-help-for-nimbles-versions-of-r-functions." class="slide section level1">
+<h1>Finding help for NIMBLE's versions of R functions.</h1>
+<ul>
+<li>Often there is a &quot;nim&quot; version of a function.</li>
+<li>Example: <code>numeric</code> is automatically converted to <code>nimNumeric</code>.</li>
+<li>You can program with <code>nimNumeric</code> directly if you prefer.</li>
+<li>Help can be found by <code>help(nimNumeric)</code>.</li>
+</ul>
+</div>
+<div id="basic-operations" class="slide section level1">
+<h1>Basic operations</h1>
+<p>Functions for creation and manipulation of numeric, integer and logical objects are listed in <a href="../NimbleUserManual.pdf#page=108">Section 10.2.2</a> of the user manual.</p>
+</div>
+<div id="example-numeric" class="slide section level1">
+<h1>Example: <code>numeric</code></h1>
+<p>In R, <code>numeric</code> creates a vector of a chosen length, initialized with zeros.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">args</span>(numeric)</code></pre></div>
+<pre><code>## function (length = 0L) 
+## NULL</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">numeric</span>(<span class="dv">5</span>)</code></pre></div>
+<pre><code>## [1] 0 0 0 0 0</code></pre>
+<p>In NIMBLE, we want some finer-grained control:</p>
+<ul>
+<li>initialization from a chosen scalar or vector;</li>
+<li>control over whether initialize values are recycled, or whether 0s are filled in.</li>
+<li>control over whether initialization is done at all.</li>
+</ul>
+<p>A goal is to allow efficient C++. It is inefficient to:</p>
+<ul>
+<li>allocate a vector initialized in a way that needs to be over-written.</li>
+<li>initialize unnecessarily.</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">args</span>(nimNumeric)</code></pre></div>
+<pre><code>## function (length = 0, value = 0, init = TRUE, fillZeros = TRUE, 
+##     recycle = TRUE) 
+## NULL</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">nimNumeric</span>(<span class="dt">length =</span> <span class="dv">5</span>, <span class="dt">value =</span> <span class="kw">c</span>(<span class="dv">1</span>, <span class="dv">2</span>))</code></pre></div>
+<pre><code>## [1] 1 2 1 2 1</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">nimNumeric</span>(<span class="dt">length =</span> <span class="dv">5</span>, <span class="dt">value =</span> <span class="kw">c</span>(<span class="dv">1</span>, <span class="dv">2</span>), <span class="dt">recycle =</span> <span class="ot">FALSE</span>, <span class="dt">fillZeros =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>## [1] 1 2 0 0 0</code></pre>
+<p>Notice that we can explore this in pure R, as in an uncompiled nimbleFunction.</p>
+<p>In R, we can't avoid initialization of some kind.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">nimNumeric</span>(<span class="dt">length =</span> <span class="dv">5</span>, <span class="dt">init =</span> <span class="ot">FALSE</span>) ## still gets zeros in uncompiled mode</code></pre></div>
+<pre><code>## [1] 0 0 0 0 0</code></pre>
+<p>Let's look at compiled behavior</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">numericDemo &lt;-<span class="st"> </span><span class="kw">nimbleFunction</span>(
+    <span class="dt">run =</span> function() {
+        ## numeric will be converted to nimNumeric...
+        a &lt;-<span class="st"> </span><span class="kw">numeric</span>(<span class="dt">length =</span> <span class="dv">5</span>, <span class="dt">value =</span> <span class="kw">c</span>(<span class="dv">1</span>, <span class="dv">2</span>))
+        <span class="kw">print</span>(<span class="st">&#39;a</span><span class="ch">\n</span><span class="st">&#39;</span>, a)
+        ## ...or you can use write nimNumeric directly
+        b &lt;-<span class="st"> </span><span class="kw">nimNumeric</span>(<span class="dt">length =</span> <span class="dv">5</span>, <span class="dt">value =</span> <span class="kw">c</span>(<span class="dv">1</span>, <span class="dv">2</span>), <span class="dt">recycle =</span> <span class="ot">FALSE</span>, <span class="dt">fillZeros =</span> <span class="ot">TRUE</span>)
+        <span class="kw">print</span>(<span class="st">&#39;b</span><span class="ch">\n</span><span class="st">&#39;</span>, b)
+        c &lt;-<span class="st"> </span><span class="kw">nimNumeric</span>(<span class="dt">length =</span> <span class="dv">8</span>, <span class="dt">value =</span> <span class="kw">c</span>(<span class="dv">1</span>, <span class="dv">2</span>), <span class="dt">recycle =</span> <span class="ot">FALSE</span>, <span class="dt">fillZeros =</span> <span class="ot">FALSE</span>)
+        <span class="kw">print</span>(<span class="st">&#39;c</span><span class="ch">\n</span><span class="st">&#39;</span>, c)
+        d &lt;-<span class="st"> </span><span class="kw">nimNumeric</span>(<span class="dt">length =</span> <span class="dv">10</span>, <span class="dt">init =</span> <span class="ot">FALSE</span>)
+        <span class="kw">print</span>(<span class="st">&#39;d</span><span class="ch">\n</span><span class="st">&#39;</span>, d)
+        ## If not given, returnType defaults to void(), which is NULL in R.
+    }
+)
+<span class="kw">numericDemo</span>()</code></pre></div>
+<pre><code>## a
+## 1 2 1 2 1
+## b
+## 1 2 0 0 0
+## c
+## 1 2 0 0 0 0 0 0
+## d
+## 0 0 0 0 0 0 0 0 0 0</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CnumericDemo &lt;-<span class="st"> </span><span class="kw">compileNimble</span>(numericDemo)</code></pre></div>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.</code></pre>
+<pre><code>## compilation finished.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">CnumericDemo</span>()</code></pre></div>
+<pre><code>## a
+## 1
+## 2
+## 1
+## 2
+## 1
+## b
+## 1
+## 2
+## 0
+## 0
+## 0
+## c
+##            1
+##            2
+## 1.97626e-323
+##            0
+##            0
+##            0
+##            0
+## 5.56268e-309
+## d
+## -1.28823e-231
+## -1.49457e-154
+##  1.48331e+151
+##   7.08923e-71
+##   7.11583e-71
+##   7.06077e-71
+##  3.19228e-110
+##  2.11311e+214
+##  4.71456e+257
+##  6.95875e-309</code></pre>
+<pre><code>## NULL</code></pre>
+</div>
+<div id="matrix-and-array" class="slide section level1">
+<h1><code>matrix</code> and <code>array</code></h1>
+<p>In addition to control over initialization, these require a compile-time argument for the scalar type ('double','integer', or 'logical').</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">args</span>(nimMatrix)</code></pre></div>
+<pre><code>## function (value = 0, nrow = NA, ncol = NA, init = TRUE, fillZeros = TRUE, 
+##     recycle = TRUE, type = &quot;double&quot;) 
+## NULL</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">args</span>(nimArray)</code></pre></div>
+<pre><code>## function (value = 0, dim = c(1, 1), init = TRUE, fillZeros = TRUE, 
+##     recycle = TRUE, nDim, type = &quot;double&quot;) 
+## NULL</code></pre>
+</div>
+<div id="math-linear-algebra-and-distributions" class="slide section level1">
+<h1>Math, linear algebra, and distributions</h1>
+<p>Supported math, including linear algebra and distribution functions, are listed in <a href="../NimbleUserManual.pdf#page=109">Sections 10.2.3-10.2.4</a> of the user manual.</p>
+<p>To a large extent, these work as you would expect.</p>
+<h2 id="type-trickiness.">Type trickiness.</h2>
+<p>NIMBLE's static typing requires care. Here is an example:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## function to do A %*% x, with A a matrix and x a vector
+matrixMult &lt;-<span class="st"> </span><span class="kw">nimbleFunction</span>(
+    <span class="dt">run =</span> function(<span class="dt">A =</span> <span class="kw">double</span>(<span class="dv">2</span>), <span class="dt">x =</span> <span class="kw">double</span>(<span class="dv">1</span>)) {
+        y &lt;-<span class="st"> </span>A %*%<span class="st"> </span>x
+        <span class="kw">return</span>(y)
+        <span class="kw">returnType</span>(<span class="kw">double</span>(<span class="dv">1</span>))
+    }
+)
+A &lt;-<span class="st"> </span><span class="kw">matrix</span>(<span class="dv">1</span>:<span class="dv">4</span>, <span class="dt">nrow =</span> <span class="dv">2</span>)
+x &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="dv">10</span>, <span class="dv">20</span>)
+A %*%<span class="st"> </span>x</code></pre></div>
+<pre><code>##      [,1]
+## [1,]   70
+## [2,]  100</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">matrixMult</span>(A, x)</code></pre></div>
+<pre><code>##      [,1]
+## [1,]   70
+## [2,]  100</code></pre>
+<p>So far, so good. Now let's compile it:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CmatrixMult &lt;-<span class="st"> </span><span class="kw">try</span>(<span class="kw">compileNimble</span>(matrixMult))</code></pre></div>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CmatrixMult</code></pre></div>
+<pre><code>## [1] &quot;Error : Number of dimensions 2 of the return() argument does not match number 1 given in the returnType() statement.\n This occurred for: return(y)\n This was part of the call:  {\n  y &lt;- ARG1_A_ %*% asCol(ARG2_x_)\n  return(y)\n}\n&quot;
+## attr(,&quot;class&quot;)
+## [1] &quot;try-error&quot;
+## attr(,&quot;condition&quot;)
+## &lt;simpleError: Number of dimensions 2 of the return() argument does not match number 1 given in the returnType() statement.
+##  This occurred for: return(y)
+##  This was part of the call:  {
+##   y &lt;- ARG1_A_ %*% asCol(ARG2_x_)
+##   return(y)
+## }&gt;</code></pre>
+<h3 id="what-is-the-problem">What is the problem?</h3>
+<ul>
+<li>Like R, NIMBLE defines any result from <code>%*%</code> to be a matrix.</li>
+<li>We intuitively know it has only one column, so we feel it is like a vector.</li>
+<li>We accidentally declared the return type to be a vector.</li>
+</ul>
+<h3 id="solutions">Solutions:</h3>
+<ol style="list-style-type: decimal">
+<li><p>We could say <code>returnType(double(2))</code></p></li>
+<li><p>If we really want a vector, use <code>y &lt;- (A %*% x)[,1]</code></p></li>
+</ol>
+<h3 id="it-gets-harder">It gets harder</h3>
+<p>These kinds of type errors can be more confusing when they are not easy for the NIMBLE compiler to catch and explain.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">matrixMult2 &lt;-<span class="st"> </span><span class="kw">nimbleFunction</span>(
+    <span class="dt">run =</span> function(<span class="dt">A =</span> <span class="kw">double</span>(<span class="dv">2</span>), <span class="dt">x =</span> <span class="kw">double</span>(<span class="dv">1</span>)) {
+        ## Say for some reason we already have used y as a vector
+        y &lt;-<span class="st"> </span><span class="kw">rnorm</span>(<span class="dv">10</span>, <span class="dt">mean =</span> <span class="dv">0</span>, <span class="dt">sd =</span> <span class="dv">1</span>)
+        ## Now we try to use y again
+        y &lt;-<span class="st"> </span>A %*%<span class="st"> </span>x
+        <span class="kw">return</span>(y)
+        <span class="kw">returnType</span>(<span class="kw">double</span>(<span class="dv">1</span>))
+    }
+)
+<span class="kw">matrixMult2</span>(A, x)</code></pre></div>
+<pre><code>##      [,1]
+## [1,]   70
+## [2,]  100</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CmatrixMult2 &lt;-<span class="st"> </span><span class="kw">try</span>(<span class="kw">compileNimble</span>(matrixMult2))</code></pre></div>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CmatrixMult2</code></pre></div>
+<pre><code>## [1] &quot;Error : Warning, mismatched dimensions in assignment: y &lt;- ARG1_A_ %*% asCol(ARG2_x_).\n&quot;
+## attr(,&quot;class&quot;)
+## [1] &quot;try-error&quot;
+## attr(,&quot;condition&quot;)
+## &lt;simpleError: Warning, mismatched dimensions in assignment: y &lt;- ARG1_A_ %*% asCol(ARG2_x_).&gt;</code></pre>
+<p>The NIMBLE compiler has caught the error, but it is more confusing.</p>
+<p>Since <code>y</code> was used as a vector first, it cannot be used as a matrix (static typing).</p>
+</div>
+<div id="flow-control" class="slide section level1">
+<h1>Flow control</h1>
+<p>NIMBLE supports:</p>
+<ul>
+<li><code>if-then-else</code></li>
+<li><code>for</code> loops with sequential integer indexing</li>
+<li><code>do-while</code></li>
+<li><code>stop</code></li>
+<li><code>checkInterrupt</code> (stop if the user has pressed Ctrl-C)</li>
+</ul>
+</div>
+<div id="other-functions" class="slide section level1">
+<h1>Other functions</h1>
+<ul>
+<li><code>print</code> and <code>cat</code></li>
+<li><code>optim</code></li>
+</ul>
+</div>
+<div id="calling-external-compiled-code" class="slide section level1">
+<h1>Calling external compiled code</h1>
+<p><code>nimbleExternalCall</code> will create a <code>nimbleFunction</code> that calls some compiled function (e.g. C or Fortran) for which you provide header information (argument and return types).</p>
+<p><code>nimbleRcall</code> will arrange to call an R function from a compiled nimbleFunction. This can be very useful for debugging.</p>
+<p>Example:</p>
+</div>
+<div id="nimblelist" class="slide section level1">
+<h1><code>nimbleList</code></h1>
+</div>
+</body>
+</html>

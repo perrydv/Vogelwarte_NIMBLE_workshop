@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Why program in NIMBLE</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Why program in NIMBLE</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="write-new-distributions" class="slide section level1">
+<h1>Write new distributions</h1>
+<ul>
+<li>At first glance, the BUGS language supports all basic distributions.</li>
+<li><p>In BUGS and JAGS, people use the &quot;zeros trick&quot; to create new distributions:</p>
+<ul>
+<li>Define a &quot;data&quot; value of 0 following a Poisson.</li>
+<li>Write the Poisson mean to give the desired probability.</li>
+<li>This is awkward and limited to what can be written in BUGS.</li>
+</ul></li>
+<li>A &quot;distribution&quot; can be <strong>any</strong> relationship defining a (log probability).</li>
+<li><p>Examples of custom distribution needs:</p>
+<ul>
+<li>zero-inflated distributions (ZIB, ZIP, ZINB)</li>
+<li>capture-recapture distributions</li>
+<li>hidden Markov model distributions (multi-state capture-recapture)</li>
+<li>occupancy and dynamic occupancy distributions</li>
+<li>distributions that use a model-specific parameterization</li>
+</ul></li>
+</ul>
+</div>
+<div id="write-new-mcmc-samplers" class="slide section level1">
+<h1>Write new MCMC samplers</h1>
+<ul>
+<li>MCMC is more like list of components (samplers) than a single algorithm.</li>
+<li>Choosing the right samplers can yield huge gains in MCMC efficiency.</li>
+<li>&quot;The cathedral and the bazaar&quot; (Raymond).</li>
+<li>A prescriptive &quot;cathedral&quot; approach, where we as experts prescribe samplers for every occasion, is bound to fail.</li>
+<li>A &quot;bazaar&quot; approach where advanced users can implement their own solutions is desirable.</li>
+<li><p>Examples:</p>
+<ul>
+<li>Samplers for <code>dcat</code> latent states (inherently inefficient)</li>
+<li>Samplers for integer latent states</li>
+<li>Samplers for SCR locations</li>
+<li>Samplers for data-augmentation virtual individuals</li>
+<li>Samplers on transformed coordinate scales</li>
+<li>Samplers that take advantage of specific model structure</li>
+<li>Samplers drawn from the huge MCMC literature, which has many ideas that are rarely used in applied work because they are not in general software.</li>
+</ul></li>
+</ul>
+</div>
+<div id="write-new-algorithms" class="slide section level1">
+<h1>Write new algorithms</h1>
+<ul>
+<li>MCMC does not address every statistical question</li>
+<li>Normalizing constants for model comparisons (information criteria)</li>
+<li>Cross-validation (in NIMBLE)</li>
+<li>Calibrated posterior-predictive p-values (in development)</li>
+<li>Maximum likelihood methods (MCEM, others in development)</li>
+<li>Sequential Monte Carlo (in NIMBLE)</li>
+<li>WAIC (in NIMBLE)</li>
+<li>Model simulators</li>
+<li>Model likelihood calculators</li>
+<li>Future: Laplace approximation and quadrature</li>
+<li>Other approaches to model selection, validation, and estimation.</li>
+<li>Your ideas.</li>
+</ul>
+</div>
+</body>
+</html>

@@ -1,0 +1,345 @@
+---
+title: "Worked example of improving efficiency: Zero-inflated Poisson N-mixture model for Swiss Great Tits data"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
+    nimble_course_dir <- file.path(getwd(),'..')
+```
+
+# Example: Swiss Great Tits
+
+This examples is from Applied Hierarchical Modeling in Ecology, Vol I (K&#233;ry and Royle), Chapter 6, section 6.11.1.
+
+### Data summary:
+
+- 267 1-km^2 quadrats in Switzerland
+- 2-3 surveys per breeding season per quadrat
+- Counts follow zero-inflated Poisson: There some probability of a structural zero, and otherwise a Poisson distribution.
+- Latent abundance depends on 8 coefficients (intercept + 7 fixed effects)
+- Detection probability depends on survey-specific intercept + 13 fixed effects (including some interactions).
+- Random effects for site abundance, site detection and survey are not used in this example.
+
+### Goals
+
+1. Look at whether the model can be re-written purely for computational efficiency (not mixing per se).
+2. Compare JAGS, NIMBLE with default samplers, and NIMBLE with different kinds of block samplers.
+
+# Figure(s) from book
+
+Let's run the original book code and generate its figure(s).
+
+```{r make-figures}
+cur_dir <- getwd()
+setwd(file.path(nimble_course_dir,
+                 'examples_code',
+                 'ZIP_Nmixture_SwissGreatTits'))
+.GlobalEnv$DO_PLOT <- TRUE
+source("ZIP_Nmixture_SwissGreatTits.R")
+setwd(cur_dir)
+```
+
+# Original BUGS code
+
+Here is the original BUGS code, modified slightly for NIMBLE, including separation of posterior predictive quantities inside a definition-time conditional.
+
+```{r original-code}
+Section6p11_code
+DO_POSTERIOR_PREDICTION <- FALSE
+```
+
+## Observations
+
+- Let's do posterior predictions later.
+- How does software know about the "on" variables?
+- What nodes share the same dependencies?  Can anything be grouped / vectorized?
+
+# Try building the model. #
+
+```{r first-model}
+m <- nimbleModel(Section6p11_code,
+                 constants = SGT_data1,
+                 inits = SGT_inits())
+## What is the warning about?
+m$initializeInfo()
+m$phi
+head(m$eps.p.survey)
+```
+### Observations
+
+- We see not everything is initialized.
+- It is ok not to initialize everything, but NIMBLE and JAGS may have
+different complaints.
+- NIMBLE models can be initialized after creation, not just by `inits` argument.
+- We'll want more complete `inits` later that what was provided in the AHM code, so I wrote a more complete one in this example's source code.
+
+# Try building the model with more complete `inits`
+
+```{r second-model}
+m2 <- nimbleModel(Section6p11_code,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+m2$initializeInfo()
+## The only nodes left not initialized are parts of y
+m2$y
+## The missing data are ok: they are really missing y values from rep 3.
+## Note, in this case we don't need these sampled, but they will be.
+```
+
+# Measure the computational cost of the model
+
+```{r comp-cost-2}
+MCMC2 <- buildMCMC(m2)
+compiled2 <- compileNimble(m2, MCMC2)
+## We want to start timing the MCMC
+system.time(compiled2$MCMC2$run(20))
+## We see reports of an initialization problem,
+## so let's do some manual calculation
+compiled2$m2$calculate()
+## We see the compiled model is now fully
+## intialized and has a valid total logProb.
+m2$calculate()
+## We see the uncompiled model (with original inits)
+## does not give a valid logProb.
+m2$logProb_y
+## We see the problem is missing parts of y
+m2$calculate("y")
+## Indeed, calculating logProbs just of y gives NA
+compiled2$m2$calculate("y")
+## But again the compiled model is ok after
+## MCMC initialization.
+
+## Conclusion: What we see is that elements of y that are missing
+## data make the model start with invalid log probability.
+## That may not be a problem.  Those nodes will be
+## initialized from their priors, so if those give decent
+## values, there will be no problem.
+## more later.  For now, we will move on.
+
+## We do not want timing results to involve NAs or NaNs,
+## since those typically engage special-case processing.
+## So let's start timing again and time 200 iterations.
+t2_200 <- system.time(compiled2$MCMC2$run(200))
+t2_200
+# 50000 samples would take
+(t2_200 * 50000 / 200)/60
+# a little under 4 minutes
+```
+
+# Turn off sampling on nodes that are "off" in the model and measure computational cost.
+
+```{r comp-cost-3}
+m3 <- nimbleModel(Section6p11_code,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+
+MCMCconf3 <- configureMCMC(m3)
+## Sampling effort is being wasted on the nodes that are "off" in the model:
+MCMCconf3$printSamplers("eps.lam")
+## So let's remove those samplers
+MCMCconf3$removeSamplers("eps.lam")
+MCMCconf3$removeSamplers("eps.p.site")
+MCMCconf3$removeSamplers("eps.p.survey")
+MCMCconf3$removeSamplers("sd.lam")
+MCMCconf3$removeSamplers("sd.p.site")
+MCMCconf3$removeSamplers("sd.p.survey")
+MCMC3 <- buildMCMC(MCMCconf3)
+compiled3 <- compileNimble(m3, MCMC3)
+system.time(compiled3$MCMC$run(20)) ## get the NAs filled in before timing
+t3_200 <- system.time(compiled3$MCMC3$run(200))
+(t3_200 * 50000 / 200)/ 60
+# a little under 3 minutes
+```
+
+# Rewrite the model to vectorize (group) some calculations that always occur together.
+
+Here is a re-written version of the model:
+
+```{r model-grouped}
+Section6p11_code_grouped
+```
+
+# Measure the computational cost of the re-written version.
+
+```{r comp-cost-4}
+m4 <- nimbleModel(Section6p11_code_grouped,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+
+MCMCconf4 <- configureMCMC(m4)
+## Sampling effort is being wasted on the nodes that are "off" in the model:
+
+MCMCconf4$removeSamplers("eps.lam")
+MCMCconf4$removeSamplers("eps.p.site")
+MCMCconf4$removeSamplers("eps.p.survey")
+MCMCconf4$removeSamplers("sd.lam")
+MCMCconf4$removeSamplers("sd.p.site")
+MCMCconf4$removeSamplers("sd.p.survey")
+
+MCMC4 <- buildMCMC(MCMCconf4)
+compiled4 <- compileNimble(m4, MCMC4)
+system.time(compiled4$MCMC$run(20)) ## get the NAs filled in before timing
+t4_200 <- system.time(compiled4$MCMC$run(200))
+(t4_200 * 50000 / 200) / 60
+# a little faster than above
+```
+
+# Conclusions on efficiency of rewriting the model
+
+- Sampling nodes not really needed is wasteful (JAGS can't avoid this.)
+
+    - Of course, this is understandable as a human pragmatism.
+
+- Separating and vectorizing some computations helps a bit, not a ton, in this case.
+
+# Try some MCMC comparisons
+
+- We want to include JAGS in a comparison.
+- We can't remove samplers on the unused part of the model in JAGS.
+- To be fair, we'll use a model with those parts removed directly from the model code.
+
+# Set up some NIMBLE sampler assignment functions
+
+Here are some functions we'll need
+
+```{r MCMC-setup}
+if(DO_POSTERIOR_PREDICTION) {
+    params <- c("theta", "ltheta", "phi", "beta0", "beta", "sd.lam", "alpha0", "mean.p", "alpha", "sd.p.site", "sd.p.survey", "fit.actual", "fit.sim", "bpv", "c.hat", "Ntotal263")
+} else {
+    params <- c("theta", "ltheta", "phi", "beta0", "beta", "alpha0", "mean.p", "alpha")
+}
+
+removeUnusedSamplers <- function(MCMCconf) {
+    MCMCconf$removeSamplers("eps.lam")
+    MCMCconf$removeSamplers("eps.p.site")
+    MCMCconf$removeSamplers("eps.p.survey")
+    MCMCconf$removeSamplers("sd.lam")
+    MCMCconf$removeSamplers("sd.p.site")
+    MCMCconf$removeSamplers("sd.p.survey")
+    MCMCconf
+}
+
+assignAFSS <- function(MCMCconf) {
+    MCMCconf$removeSamplers(c("beta0","beta"))
+    MCMCconf$addSampler(c("beta0","beta"), type = "AF_slice")
+    MCMCconf$removeSamplers(c("mean.p", "alpha"))
+    MCMCconf$addSampler(c("mean.p", "alpha"), type = "AF_slice")
+    MCMCconf
+}
+
+assignRWB <- function(MCMCconf) {
+    MCMCconf$removeSamplers(c("beta0","beta"))
+    MCMCconf$addSampler(c("beta0","beta"), type = "AF_slice")
+    MCMCconf$removeSamplers(c("mean.p", "alpha"))
+    MCMCconf$addSampler(c("mean.p", "alpha"), type = "AF_slice")
+    MCMCconf
+}
+```
+
+# MCMC comparison 1: JAGS, NIMBLE default, NIMBLE AFSS, NIMBLE RWB
+
+```{r MCMC-1}
+
+MCMCdefs = list(
+    nimbleAFSS = quote({
+        assignAFSS(configureMCMC(Rmodel))
+    }),
+    nimbleRWB = quote({
+        assignRWB(configureMCMC(Rmodel))
+    })
+)
+
+nb = 1000
+ni = 10000
+
+inits_values <- SGT_inits_full()
+inits_values <- inits_values[c("N","beta0","mean.p",
+                               "beta","alpha","phi","a")]
+
+SGT_data1_JAGS <- SGT_data1[c("y", "lamDM", "elev", "date", "dur",
+                              "elev2", "date2", "dur2",
+                              "nsite", "nrep")]
+
+ZIP_Nmix_comparisons_JAGS <- compareMCMCs(
+    modelInfo = list(
+        code = Section6p11_code_jags_compatible,
+        data = SGT_data1_JAGS,
+        inits = inits_values
+        ),
+    monitors = params,
+    MCMCdefs = MCMCdefs,
+    MCMCs = c('jags','nimble','nimbleRWB','nimbleAFSS'),
+    summary = TRUE,
+    burnin = nb,
+    niter = ni
+)
+
+make_MCMC_comparison_pages(ZIP_Nmix_comparisons_JAGS,
+                           dir = "ZIP_Nmix_comparison_JAGS",
+                           modelNames = "ZIP_Nmix_SGT")
+
+##browseURL(file.path("ZIP_Nmix_comparison_JAGS",
+##                    "ZIP_Nmix_SGT.html"))
+
+```
+
+Results are [here](ZIP_Nmix_comparison_JAGS/ZIP_Nmix_SGT.html)
+
+# Comparison 2: NIMBLE default, NIMBLE AFSS, NIMBLE RWB for vectorized version of model.
+
+```{r MCMC-2}
+
+MCMCdefs = list(
+    default = quote({
+        removeUnusedSamplers(configureMCMC(Rmodel))
+    }),
+    AFSS = quote({
+        assignAFSS(removeUnusedSamplers(configureMCMC(Rmodel)))
+    }),
+    RWB = quote({
+        assignRWB(removeUnusedSamplers(configureMCMC(Rmodel)))
+    })
+)
+
+nb = 1000
+ni = 10000
+
+ZIP_Nmix_comparisons <- compareMCMCs(
+    modelInfo = list(
+        code = Section6p11_code_grouped,
+        data = SGT_data1,
+        inits = SGT_inits_full()
+        ),
+    monitors = params,
+    MCMCdefs = MCMCdefs,
+    MCMCs = c('default','AFSS', 'RWB'),
+    summary = TRUE,
+    burnin = nb,
+    niter = ni
+)
+
+ZIP_Nmix_comparisons_all <- combine_MCMC_comparison_results(ZIP_Nmix_comparisons_JAGS[[1]],
+                                                            ZIP_Nmix_comparisons[[1]])
+
+make_MCMC_comparison_pages(ZIP_Nmix_comparisons_all,
+                           "ZIP_Nmix_comparisons_all",
+                           modelNames = "ZIP_Nmix")
+
+##browseURL(file.path("ZIP_Nmix_comparisons_all","ZIP_Nmix.html"))
+```
+
+Results are [here](ZIP_Nmix_comparisons_all/ZIP_Nmix.html")
+
+# Conclusions:
+
+- NIMBLE's default samplers are faster than JAGS.
+- Block sampling helps a lot in this model.
+- Re-writing the model may help a little, but not nearly as much as using better samplers.

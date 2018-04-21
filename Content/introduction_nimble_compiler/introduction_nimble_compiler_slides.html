@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Introduction to the NIMBLE compiler</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Introduction to the NIMBLE compiler</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="supported-r-functions-and-syntax" class="slide section level1">
+<h1>Supported R functions and syntax</h1>
+<ul>
+<li>Supports much of R's math and distribution functions (details later).</li>
+<li>Supports <code>for</code> loops with sequential integer indices.</li>
+<li>Supports <code>if-then-else</code> and <code>do-while</code></li>
+<li>Supports object creation with modified versions of <code>numeric()</code>, <code>matrix()</code> and <code>array()</code></li>
+<li><code>nimbleList</code> supports somewhat list-like data structures</li>
+<li><strong>Pass-by-reference semantics</strong> in compiled nimbleFunctions. This is fundamentally different (and faster) than R's pass-by-value (copy) semantics.</li>
+</ul>
+</div>
+<div id="type-declarations" class="slide section level1">
+<h1>Type declarations</h1>
+<p>Argument and return type declarations are required.</p>
+<ul>
+<li><strong>Type</strong> = Scalar type (double, integer, or logical) and number of dimensions</li>
+<li>Sizes of each dimension can change.</li>
+<li>Static typing: a variable name cannot be re-used with a new type.</li>
+</ul>
+</div>
+<div id="basics-of-generated-c" class="slide section level1">
+<h1>Basics of generated C++</h1>
+<ul>
+<li>Linear algebra (including simple vectorized math) is implemented via the Eigen library.</li>
+<li><p><em>Everything has an interface</em>:</p>
+<ul>
+<li>You can call any method of a <code>nimbleFunction</code> class.</li>
+<li>You can access member data of <code>nimbleFunction</code> classes</li>
+</ul></li>
+</ul>
+</div>
+<div id="how-to-inspect-or-modify-generated-c" class="slide section level1">
+<h1>How to inspect or modify generated C++</h1>
+<p>Look in <code>tempdir()</code>, or tell <code>compileNimble</code> where to put the C++.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">timesScalarVector &lt;-<span class="st"> </span><span class="kw">nimbleFunction</span>(
+    <span class="dt">name =</span> <span class="st">&#39;timesScalarVector&#39;</span>, ## optional name used in C++
+    <span class="dt">run =</span> function(<span class="dt">a =</span> <span class="kw">double</span>(<span class="dv">0</span>),  <span class="co">#0-dimensional double, aka scalar</span>
+                   <span class="dt">x =</span> <span class="kw">double</span>(<span class="dv">1</span>)   <span class="co">#1-dimensional double, aka vector</span>
+                   ) {
+        ans &lt;-<span class="st"> </span>a *<span class="st"> </span>x          <span class="co"># regular R math syntax</span>
+        <span class="kw">return</span>(ans)           <span class="co"># explicit return statement is required</span>
+        <span class="kw">returnType</span>(<span class="kw">double</span>(<span class="dv">1</span>)) <span class="co">#vector return type</span>
+        <span class="co"># returnType statement can appear anywhere in the function</span>
+    })
+## Place the C++ code in the current directory
+CtimesScalarVector &lt;-<span class="st"> </span><span class="kw">compileNimble</span>(timesScalarVector, <span class="dt">dirName =</span> <span class="st">&#39;.&#39;</span>)</code></pre></div>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.</code></pre>
+<pre><code>## compilation finished.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## By default, C++ is written in the temporary directory that R
+## creates for every session.  Its location can be found by
+<span class="kw">tempdir</span>()</code></pre></div>
+<pre><code>## [1] &quot;/var/folders/v7/tzbf84253jg2_l2pm304l2cr0000gn/T//RtmpXR8EXi&quot;</code></pre>
+<p>We can inspect the C++ header file, <a href="P_1_timesScalarVector.h" class="uri">P_1_timesScalarVector.h</a>, and the C++ implementation file, <a href="P_1_timesScalarVector.cpp" class="uri">P_1_timesScalarVector.cpp</a>.</p>
+</div>
+<div id="upcoming-features" class="slide section level1">
+<h1>Upcoming features</h1>
+<ul>
+<li>Automatic differentiation using the CppAD library.</li>
+<li>We have experimented with some use of Google's TensorFlow.</li>
+</ul>
+</div>
+<div id="a-note-on-the-future-of-the-nimble-compiler-and-nimblefunctions" class="slide section level1">
+<h1>A note on the future of the NIMBLE compiler and <code>nimbleFunctions</code></h1>
+<ul>
+<li>This has been a successful part of NIMBLE development in its own right (aside from its original goal of model-generic programming).</li>
+<li>We aim to develop it more fully into a distinct programming tool.</li>
+<li><p>Changes will include:</p>
+<ul>
+<li>Better type declaration system.</li>
+<li>Clearer distinction of class vs. function programming.</li>
+<li>More flexible use of native R object.</li>
+<li>Other kinds of flexibility.</li>
+</ul></li>
+<li><p>We welcome contributors...</p></li>
+</ul>
+</div>
+</body>
+</html>

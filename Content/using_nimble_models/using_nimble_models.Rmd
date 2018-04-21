@@ -1,0 +1,75 @@
+---
+title: "Introduction to using NIMBLE models"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
+    nimble_course_dir <- file.path(getwd(),'..')
+source(file.path(nimble_course_dir,
+                 'examples_code',
+                 'pump',
+                 'pump_model.R'))
+```
+
+# Models are objects in R
+
+# Get and set values
+
+```{r, get-set-values}
+pump$lambda
+pump$lambda[3] <- 100
+pump$lambda
+```
+
+# Simulate values
+
+Simulation means:
+
+* Draw values of stochastic nodes
+* Calculate values of deterministic nodes
+
+```{r, simulate}
+pump$lambda
+pump$simulate('lambda[1:5]')
+pump$lambda
+```
+
+# Calculate values and log probabilities 
+
+Calculation means:
+
+* Calculate and store log probabilities of stochastic nodes
+* Calculate values of deterministic nodes
+* Return the sum of log probabilities of stochastic nodes
+
+```{r, calculate}
+pump$calculate(c('lambda[1:5]', 'theta[1:5]'))
+```
+
+# Query the graph structure
+
+```{r, graph-query}
+pump$getDependencies('lambda[1:5]')
+```
+
+# Model-generic programming
+
+Say we want a function that simulates all parts of a model that depend on some input nodes and then returns the corresponding summed log probability.  I will call this part of the model "downstream".
+
+```{r, generic-simulate}
+simulate_downstream <- function(model, nodes) {
+  downstream_nodes <- model$getDependencies(nodes, downstream = TRUE)
+  model$simulate( downstream_nodes )
+  logProb <- model$calculate( downstream_nodes )
+  logProb
+}
+```
+Notice that this function will work with *any* model and *any* set of input nodes.

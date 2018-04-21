@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Introduction to nimbleFunctions</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Introduction to nimbleFunctions</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="nimblefunction-within-r-is-nimbles-programming-system" class="slide section level1">
+<h1><code>nimbleFunction</code> within R is NIMBLE's programming system</h1>
+<p><code>nimbleFunction</code> is like a replacement for <code>function</code> (but it is itself a <code>function</code>).</p>
+<h2 id="two-kinds-of-nimblefunction">Two kinds of <code>nimbleFunction</code></h2>
+<ol style="list-style-type: decimal">
+<li><p>Simple <code>nimbleFunction</code>: a compilable replacement for <code>function</code> with just math and flow control.</p></li>
+<li><p>Two-stage <code>nimbleFunction</code>: supports programming with models (although a model is not required).</p></li>
+</ol>
+</div>
+<div id="simple-nimblefunction-no-setup-code" class="slide section level1">
+<h1>Simple <code>nimbleFunction</code> (no <code>setup</code> code):</h1>
+<p>A simple <code>nimbleFunction</code> requires type declarations for inputs and outputs.</p>
+<h3 id="example">Example:</h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">timesScalarVector &lt;-<span class="st"> </span><span class="kw">nimbleFunction</span>(
+    <span class="dt">run =</span> function(<span class="dt">a =</span> <span class="kw">double</span>(<span class="dv">0</span>),  <span class="co">#0-dimensional double, aka scalar</span>
+                   <span class="dt">x =</span> <span class="kw">double</span>(<span class="dv">1</span>)   <span class="co">#1-dimensional double, aka vector</span>
+                   ) {
+        ans &lt;-<span class="st"> </span>a *<span class="st"> </span>x          <span class="co"># regular R math syntax</span>
+        <span class="kw">return</span>(ans)           <span class="co"># explicit return statement is required</span>
+        <span class="kw">returnType</span>(<span class="kw">double</span>(<span class="dv">1</span>)) <span class="co">#vector return type</span>
+        <span class="co"># returnType statement can appear anywhere in the function</span>
+    })</code></pre></div>
+<h3 id="uncompiled-execution">Uncompiled execution</h3>
+<p>This can be run uncompiled, with use of R's debugging tools</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">a &lt;-<span class="st"> </span><span class="dv">2</span>
+x &lt;-<span class="st"> </span><span class="kw">rnorm</span>(<span class="dv">10000</span>)
+y &lt;-<span class="st"> </span><span class="kw">timesScalarVector</span>(a, x)
+<span class="kw">head</span>(y)</code></pre></div>
+<pre><code>## [1]  0.7396786  0.6442932  0.8527116 -1.0271043 -0.6793384  0.1447999</code></pre>
+<h3 id="compiled-execution">Compiled execution</h3>
+<p>It can also be compiled and run the same way.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CtimesScalarVector &lt;-<span class="st"> </span><span class="kw">compileNimble</span>(timesScalarVector)</code></pre></div>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.</code></pre>
+<pre><code>## compilation finished.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">Cy &lt;-<span class="st"> </span><span class="kw">CtimesScalarVector</span>(a, x)
+<span class="kw">head</span>(Cy)</code></pre></div>
+<pre><code>## [1]  0.7396786  0.6442932  0.8527116 -1.0271043 -0.6793384  0.1447999</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">identical</span>(y, Cy)</code></pre></div>
+<pre><code>## [1] TRUE</code></pre>
+<p>In this case there is no measurable speed improvement because both versions run in &quot;0&quot; time because it is so simple.</p>
+<p>In other cases:</p>
+<ul>
+<li>Pro: Compiled code is typically faster, sometimes much faster, internally.</li>
+<li>Con: There is some copying overhead for entry and exit to compiled code.</li>
+</ul>
+</div>
+<div id="two-stage-nimblefunction" class="slide section level1">
+<h1>Two-stage <code>nimbleFunction</code></h1>
+<h2 id="two-stage-evaluation">Two-stage evaluation</h2>
+<p>In many programming tasks,</p>
+<ul>
+<li>some steps are needed only once,</li>
+<li>other steps are needed repeatedly.</li>
+</ul>
+<h2 id="mcmc-example">MCMC example:</h2>
+<p>When creating a sampler for a model node <code>beta</code> in model <code>M</code>:</p>
+<ul>
+<li>Determination of <code>beta</code>'s dependencies in <code>M</code> is needed only once.</li>
+<li>Running the sampler (with the same dependencies) is needed repeatedly.</li>
+</ul>
+<p>We say an <strong>instance</strong> or <strong>specialization</strong> of the sampler has been <strong>specialized</strong> to the case of node <code>beta</code> in model <code>M</code>.</p>
+<h2 id="toy-example-for-illustration">Toy example for illustration</h2>
+<p><strong>Problem:</strong> Say we repeatedly need to multiply elements of one vector, <code>x</code>, by components of the cumulative sum of another vector, <code>y</code>.</p>
+<ul>
+<li><code>x</code> will change every time.</li>
+<li><code>y</code> will stay the same.</li>
+</ul>
+<h3 id="naive-solution">Naive solution</h3>
+<p>We could write this as simple function (or nimbleFunction):</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">set.seed</span>(<span class="dv">1</span>)
+multCumsum &lt;-<span class="st"> </span>function(x, y) {
+    <span class="kw">return</span>(x *<span class="st"> </span><span class="kw">cumsum</span>(y))
+}
+x &lt;-<span class="st"> </span><span class="kw">seq</span>(.<span class="dv">1</span>, <span class="fl">1.0</span>, <span class="dt">by =</span> .<span class="dv">1</span>)
+y &lt;-<span class="st"> </span><span class="dv">1</span>:<span class="dv">10</span>
+x</code></pre></div>
+<pre><code>##  [1] 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">y</code></pre></div>
+<pre><code>##  [1]  1  2  3  4  5  6  7  8  9 10</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">cumsum</span>(y)</code></pre></div>
+<pre><code>##  [1]  1  3  6 10 15 21 28 36 45 55</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">multCumsum</span>(x, y)</code></pre></div>
+<pre><code>##  [1]  0.1  0.6  1.8  4.0  7.5 12.6 19.6 28.8 40.5 55.0</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## To use it with a new x, cumsum(y) is wastefully recomputed internally
+x2 &lt;-<span class="st"> </span><span class="kw">seq</span>(.<span class="dv">01</span>, .<span class="dv">1</span>, <span class="dt">by =</span> .<span class="dv">01</span>)
+<span class="kw">multCumsum</span>(x2, y)</code></pre></div>
+<pre><code>##  [1] 0.01 0.06 0.18 0.40 0.75 1.26 1.96 2.88 4.05 5.50</code></pre>
+<p>Efficiency problem:</p>
+<ul>
+<li>We know the same <code>y</code> will be used with different <code>x</code>s.</li>
+<li>Recomputing <code>cumsum(y)</code> every time is wasteful.</li>
+</ul>
+<h3 id="two-stage-solution">Two-stage solution</h3>
+<p><strong>Solution:</strong> Use two-stage evalution to <strong>specialize</strong> a case of <code>multCumsum</code> to <code>y</code>.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">multCumsumNF &lt;-<span class="st"> </span><span class="kw">nimbleFunction</span>(
+    <span class="dt">setup =</span> function(y) {  ## setup is evaluated in R, never compiled
+        CSy &lt;-<span class="st"> </span><span class="kw">cumsum</span>(y)   ## Objects created here are available in run code.
+    },
+    <span class="dt">run =</span> function(<span class="dt">x =</span> <span class="kw">double</span>(<span class="dv">1</span>)) { ## This is compilable, so type declarations are needed
+        <span class="kw">returnType</span>(<span class="kw">double</span>(<span class="dv">1</span>))
+        <span class="kw">return</span>(x *<span class="st"> </span>CSy)
+    }
+    ## Additional functions (aka &quot;methods&quot;) can be provided
+)</code></pre></div>
+<h3 id="uncompiled-execution-1">Uncompiled execution</h3>
+<p>Again, this can be used uncompiled (with debugging) or compiled (for speed)</p>
+<p>Here is how we'd use it uncompiled:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">multCumsumNF_y &lt;-<span class="st"> </span><span class="kw">multCumsumNF</span>(y) ## calls setup function
+## returns an object with a run method
+multCumsumNF_y$<span class="kw">run</span>(x)</code></pre></div>
+<pre><code>##  [1]  0.1  0.6  1.8  4.0  7.5 12.6 19.6 28.8 40.5 55.0</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## Now we can use it with the new x2 and the old y, which is &quot;baked in&quot;
+multCumsumNF_y$<span class="kw">run</span>(x2)</code></pre></div>
+<pre><code>##  [1] 0.01 0.06 0.18 0.40 0.75 1.26 1.96 2.88 4.05 5.50</code></pre>
+<p>Under the hood, this is an object-oriented (class) system.</p>
+<p>We call <code>multCumsumNF</code> a <strong>nimbleFunction generator</strong> and <code>multCumsum_y</code> an <strong>instance</strong>, <strong>specialization</strong>, or <strong>object</strong>.</p>
+<h3 id="compiled-execution-1">Compiled execution</h3>
+<p>We compile the <strong>instances</strong>:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CmultCumsumNF_y &lt;-<span class="st"> </span><span class="kw">compileNimble</span>(multCumsumNF_y)</code></pre></div>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.</code></pre>
+<pre><code>## compilation finished.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CmultCumsumNF_y$<span class="kw">run</span>(x)  ## This calls compiled C++</code></pre></div>
+<pre><code>##  [1]  0.1  0.6  1.8  4.0  7.5 12.6 19.6 28.8 40.5 55.0</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CmultCumsumNF_y$<span class="kw">run</span>(x2)</code></pre></div>
+<pre><code>##  [1] 0.01 0.06 0.18 0.40 0.75 1.26 1.96 2.88 4.05 5.50</code></pre>
+<p>If we need a new instance, we create it in R and compile it indicating it is in the same NIMBLE project.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">y2 &lt;-<span class="st"> </span><span class="kw">seq</span>(<span class="dv">10</span>, <span class="dv">100</span>, <span class="dt">by =</span> <span class="dv">10</span>)
+multCumsumNF_y2 &lt;-<span class="st"> </span><span class="kw">multCumsumNF</span>(y2)
+CmultCumsumNF_y2 &lt;-<span class="st"> </span><span class="kw">compileNimble</span>(multCumsumNF_y2, <span class="dt">project =</span> multCumsumNF_y)</code></pre></div>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.</code></pre>
+<pre><code>## compilation finished.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CmultCumsumNF_y2$<span class="kw">run</span>(x)</code></pre></div>
+<pre><code>##  [1]   1   6  18  40  75 126 196 288 405 550</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CmultCumsumNF_y2$<span class="kw">run</span>(x2)</code></pre></div>
+<pre><code>##  [1]  0.1  0.6  1.8  4.0  7.5 12.6 19.6 28.8 40.5 55.0</code></pre>
+</div>
+</body>
+</html>

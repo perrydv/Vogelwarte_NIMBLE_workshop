@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>How we compare MCMC performance</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_CHTML-full" type="text/javascript"></script>
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">How we compare MCMC performance</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="overview" class="slide section level1">
+<h1>Overview</h1>
+<ul>
+<li>NIMBLE allows fine-grained control over how MCMC is done.</li>
+<li>Often, great improvements can be made.</li>
+<li>First, we need a way to measure performance.</li>
+</ul>
+</div>
+<div id="example-dipper-capture-recapture-cjs-model" class="slide section level1">
+<h1>Example: Dipper capture-recapture (CJS) model</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">defaultMCMCconf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(dipper_model)
+defaultMCMC &lt;-<span class="st"> </span><span class="kw">buildMCMC</span>(defaultMCMCconf)
+## We can compile both in one step
+dipper_compiled &lt;-<span class="st"> </span><span class="kw">compileNimble</span>(dipper_model, defaultMCMC)</code></pre></div>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.</code></pre>
+<pre><code>## compilation finished.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CdefaultMCMC &lt;-<span class="st"> </span>dipper_compiled$defaultMCMC
+## Illustration of running MCMC &quot;directly&quot;
+CdefaultMCMC$<span class="kw">run</span>(<span class="dv">5000</span>)</code></pre></div>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<pre><code>## NULL</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">defaultSamples &lt;-<span class="st"> </span><span class="kw">as.matrix</span>(CdefaultMCMC$mvSamples)
+## Do burn-in manually when running in this mode
+defaultSamples &lt;-<span class="st"> </span>defaultSamples[<span class="dv">1001</span>:<span class="dv">5000</span>,]
+<span class="kw">dir.create</span>(<span class="st">&#39;default_samples_plots&#39;</span>, <span class="dt">showWarnings =</span> <span class="ot">FALSE</span>)
+<span class="kw">mcmcplot</span>(defaultSamples, <span class="dt">dir =</span> <span class="st">&#39;default_samples_plots&#39;</span>)</code></pre></div>
+<pre><code>## 
+                                                                           
+Preparing plots for p.  50% complete.</code></pre>
+<pre><code>## 
+                                                                           
+Preparing plots for phi.  100% complete.</code></pre>
+<p>MCMC plots are <a href="default_samples_plots/MCMCoutput.html">here</a></p>
+</div>
+<div id="effective-sample-size-for-one-node-parameter-or-latent-state" class="slide section level1">
+<h1>Effective sample size for one node (parameter or latent state)</h1>
+<ul>
+<li>When looking at the MCMC traceplot for one variable, we see that samples are not sequentially independent. That is the nature of MCMC.</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot</span>(defaultSamples[<span class="dv">2051</span>:<span class="dv">2100</span>, <span class="st">&#39;p&#39;</span>], <span class="dt">type =</span> <span class="st">&#39;b&#39;</span>) </code></pre></div>
+<div class="figure">
+<img src="figure/zoomed-trace-plot-1.png" alt="plot of chunk zoomed-trace-plot" />
+<p class="caption">plot of chunk zoomed-trace-plot</p>
+</div>
+<p>In this case we see both autocorrelation and Metropolis-Hastings rejections, which have occurred when the state does not change. (This does not happen in JAGS, because it does not use Metropolis-Hastings.)</p>
+<ul>
+<li><em>Effective sample size (ESS)</em> is the equivalent number of independent samples in an MCMC chain for one parameter.</li>
+</ul>
+</div>
+<div id="what-does-equivalent-number-of-independent-samples-mean" class="slide section level1">
+<h1>What does &quot;equivalent number of independent samples&quot; mean?</h1>
+<ul>
+<li>If <code>p[i]</code> were drawn independently (m samples), we could say:</li>
+</ul>
+<p><span class="math inline">\(\mbox{Var}[\overline{p[i]}] = \mbox{Var}[ \frac{1}{m} \sum_{i = 1}^m p[i] ]= \frac{\mbox{Var}[p[i]]}{m}\)</span></p>
+<ul>
+<li>Instead, we have</li>
+</ul>
+<p><span class="math inline">\(\mbox{Var}[\overline{p[i]}] = \frac{\mbox{Var}[p[i]]}{\mbox{ESS}}\)</span></p>
+<p>where ESS is the <em>Effective Sample Size</em>.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(coda)
+<span class="kw">effectiveSize</span>(defaultSamples)</code></pre></div>
+<pre><code>##        p      phi 
+## 274.5079 630.4315</code></pre>
+<p>We can see that the effective sample size is considerably smaller than the number of samples (4000, in this case).</p>
+</div>
+<div id="measuring-mcmc-performance-mcmc-efficiency" class="slide section level1">
+<h1>Measuring MCMC performance: MCMC efficiency</h1>
+<ul>
+<li>We define <em>MCMC efficiency</em> as</li>
+</ul>
+<p><span class="math inline">\(\frac{\mbox{ESS}}{\mbox{computation time}}\)</span></p>
+<ul>
+<li>This is the number of effectively independent samples generated per time.</li>
+<li>ESS is different for every parameter.</li>
+<li>Computation time is the same for every parameter: the total time.</li>
+<li>We do not count setup steps like model building and compilation as part of computation time. Even though these take time, we are more interested in the final MCMC performance.</li>
+<li>One needs a reasonable sample just to get a reasonable estimate of ESS.</li>
+<li>We generally do not thin when comparing methods because thinning always removes some information from a sample. People might disagree on this choice.</li>
+</ul>
+</div>
+<div id="a-single-number-minimum-mcmc-efficiency" class="slide section level1">
+<h1>A single number: Minimum MCMC efficiency</h1>
+<ul>
+<li>We want a single number to measure the performance of an MCMC.</li>
+<li>Often there are many fast-mixing parameters and one or a few slow-mixing ones.</li>
+<li>We need all parameters to be mixed well to rely on results.</li>
+<li>Therefore our single measure of efficiency is:</li>
+</ul>
+<p><strong>Net MCMC efficiency = Minimum MCMC efficiency over all parameters</strong></p>
+</div>
+</body>
+</html>
