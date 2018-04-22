@@ -1,0 +1,244 @@
+## ----setup, include=FALSE------------------------------------------------
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
+    nimble_course_dir <- file.path(getwd(),'..')
+cur_dir <- getwd()
+setwd(file.path(nimble_course_dir,
+                 'examples_code',
+                 'ZIP_Nmixture_SwissGreatTits'))
+source("ZIP_Nmixture_SwissGreatTits.R")
+setwd(cur_dir)
+
+## ----original-code-------------------------------------------------------
+Section6p11_code
+DO_POSTERIOR_PREDICTION <- FALSE
+.GlobalEnv$DO_POSTERIOR_PREDICTION <- FALSE
+
+## ----first-model---------------------------------------------------------
+m <- nimbleModel(Section6p11_code,
+                 constants = SGT_data1,
+                 inits = SGT_inits())
+## What is the warning about?
+m$initializeInfo()
+m$phi
+head(m$eps.p.survey)
+
+## ----second-model--------------------------------------------------------
+m2 <- nimbleModel(Section6p11_code,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+m2$initializeInfo()
+## The only nodes left not initialized are parts of y
+m2$y
+## The missing data are ok: they are really missing y values from rep 3.
+## Note, in this case we don't need these sampled, but they will be.
+
+## ----comp-cost-2---------------------------------------------------------
+MCMC2 <- buildMCMC(m2)
+compiled2 <- compileNimble(m2, MCMC2)
+## We want to start timing the MCMC
+system.time(compiled2$MCMC2$run(20))
+## We see reports of an initialization problem,
+## so let's do some manual calculation
+compiled2$m2$calculate()
+## We see the compiled model is now fully
+## intialized and has a valid total logProb.
+m2$calculate()
+## We see the uncompiled model (with original inits)
+## does not give a valid logProb.
+m2$logProb_y
+## We see the problem is missing parts of y
+m2$calculate("y")
+## Indeed, calculating logProbs just of y gives NA
+compiled2$m2$calculate("y")
+## But again the compiled model is ok after
+## MCMC initialization.
+
+## Conclusion: What we see is that elements of y that are missing
+## data make the model start with invalid log probability.
+## That may not be a problem.  Those nodes will be
+## initialized from their priors, so if those give decent
+## values, there will be no problem.
+## more later.  For now, we will move on.
+
+## We do not want timing results to involve NAs or NaNs,
+## since those typically engage special-case processing.
+## So let's start timing again and time 200 iterations.
+t2_200 <- system.time(compiled2$MCMC2$run(200))
+t2_200
+# 50000 samples would take
+(t2_200 * 50000 / 200)/60
+# a little under 4 minutes
+
+## ----comp-cost-3---------------------------------------------------------
+m3 <- nimbleModel(Section6p11_code,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+
+MCMCconf3 <- configureMCMC(m3)
+## Sampling effort is being wasted on the nodes that are "off" in the model:
+MCMCconf3$printSamplers("eps.lam")
+## So let's remove those samplers
+MCMCconf3$removeSamplers("eps.lam")
+MCMCconf3$removeSamplers("eps.p.site")
+MCMCconf3$removeSamplers("eps.p.survey")
+MCMCconf3$removeSamplers("sd.lam")
+MCMCconf3$removeSamplers("sd.p.site")
+MCMCconf3$removeSamplers("sd.p.survey")
+MCMC3 <- buildMCMC(MCMCconf3)
+compiled3 <- compileNimble(m3, MCMC3)
+system.time(compiled3$MCMC$run(20)) ## get the NAs filled in before timing
+t3_200 <- system.time(compiled3$MCMC3$run(200))
+(t3_200 * 50000 / 200)/ 60
+# a little under 3 minutes
+
+## ----model-grouped-------------------------------------------------------
+Section6p11_code_grouped
+
+## ----comp-cost-4---------------------------------------------------------
+m4 <- nimbleModel(Section6p11_code_grouped,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+
+MCMCconf4 <- configureMCMC(m4)
+## Sampling effort is being wasted on the nodes that are "off" in the model:
+
+MCMCconf4$removeSamplers("eps.lam")
+MCMCconf4$removeSamplers("eps.p.site")
+MCMCconf4$removeSamplers("eps.p.survey")
+MCMCconf4$removeSamplers("sd.lam")
+MCMCconf4$removeSamplers("sd.p.site")
+MCMCconf4$removeSamplers("sd.p.survey")
+
+MCMC4 <- buildMCMC(MCMCconf4)
+compiled4 <- compileNimble(m4, MCMC4)
+system.time(compiled4$MCMC$run(20)) ## get the NAs filled in before timing
+t4_200 <- system.time(compiled4$MCMC$run(200))
+(t4_200 * 50000 / 200) / 60
+# a little faster than above
+
+## ----MCMC-setup----------------------------------------------------------
+if(DO_POSTERIOR_PREDICTION) {
+    params <- c("theta", "ltheta", "phi", "beta0", "beta", "sd.lam", "alpha0", "mean.p", "alpha", "sd.p.site", "sd.p.survey", "fit.actual", "fit.sim", "bpv", "c.hat", "Ntotal263")
+} else {
+    params <- c("theta", "ltheta", "phi", "beta0", "beta", "alpha0", "mean.p", "alpha")
+}
+
+removeUnusedSamplers <- function(MCMCconf) {
+    MCMCconf$removeSamplers("eps.lam")
+    MCMCconf$removeSamplers("eps.p.site")
+    MCMCconf$removeSamplers("eps.p.survey")
+    MCMCconf$removeSamplers("sd.lam")
+    MCMCconf$removeSamplers("sd.p.site")
+    MCMCconf$removeSamplers("sd.p.survey")
+    MCMCconf
+}
+
+.GlobalEnv$removeUnusedSamplers <- removeUnusedSamplers
+
+assignAFSS <- function(MCMCconf) {
+    MCMCconf$removeSamplers(c("beta0","beta"))
+    MCMCconf$addSampler(c("beta0","beta"), type = "AF_slice")
+    MCMCconf$removeSamplers(c("mean.p", "alpha"))
+    MCMCconf$addSampler(c("mean.p", "alpha"), type = "AF_slice")
+    MCMCconf
+}
+
+.GlobalEnv$assignAFSS <- assignAFSS
+
+assignRWB <- function(MCMCconf) {
+    MCMCconf$removeSamplers(c("beta0","beta"))
+    MCMCconf$addSampler(c("beta0","beta"), type = "AF_slice")
+    MCMCconf$removeSamplers(c("mean.p", "alpha"))
+    MCMCconf$addSampler(c("mean.p", "alpha"), type = "AF_slice")
+    MCMCconf
+}
+
+.GlobalEnv$assignRWB <- assignRWB
+
+
+## ----MCMC-1, eval=FALSE--------------------------------------------------
+## 
+## MCMCdefs = list(
+##     nimbleAFSS = quote({
+##         assignAFSS(configureMCMC(Rmodel))
+##     }),
+##     nimbleRWB = quote({
+##         assignRWB(configureMCMC(Rmodel))
+##     })
+## )
+## 
+## nb = 1000
+## ni = 10000
+## 
+## inits_values <- SGT_inits_full()
+## inits_values <- inits_values[c("N","beta0","mean.p",
+##                                "beta","alpha","phi","a")]
+## 
+## SGT_data1_JAGS <- SGT_data1[c("y", "lamDM", "elev", "date", "dur",
+##                               "elev2", "date2", "dur2",
+##                               "nsite", "nrep")]
+## 
+## ZIP_Nmix_comparisons_JAGS <- compareMCMCs(
+##     modelInfo = list(
+##         code = Section6p11_code_jags_compatible,
+##         data = SGT_data1_JAGS,
+##         inits = inits_values
+##         ),
+##     monitors = params,
+##     MCMCdefs = MCMCdefs,
+##     MCMCs = c('jags','nimble','nimbleRWB','nimbleAFSS'),
+##     summary = TRUE,
+##     burnin = nb,
+##     niter = ni
+## )
+## 
+## make_MCMC_comparison_pages(ZIP_Nmix_comparisons_JAGS,
+##                            dir = "ZIP_Nmix_comparison_JAGS",
+##                            modelNames = "ZIP_Nmix_SGT")
+## 
+## ##browseURL(file.path("ZIP_Nmix_comparison_JAGS",
+## ##                    "ZIP_Nmix_SGT.html"))
+## 
+
+## ----MCMC-2, eval=FALSE--------------------------------------------------
+## 
+## MCMCdefs = list(
+##     default = quote({
+##         removeUnusedSamplers(configureMCMC(Rmodel))
+##     }),
+##     AFSS = quote({
+##         assignAFSS(removeUnusedSamplers(configureMCMC(Rmodel)))
+##     }),
+##     RWB = quote({
+##         assignRWB(removeUnusedSamplers(configureMCMC(Rmodel)))
+##     })
+## )
+## 
+## nb = 1000
+## ni = 10000
+## 
+## ZIP_Nmix_comparisons <- compareMCMCs(
+##     modelInfo = list(
+##         code = Section6p11_code_grouped,
+##         data = SGT_data1,
+##         inits = SGT_inits_full()
+##         ),
+##     monitors = params,
+##     MCMCdefs = MCMCdefs,
+##     MCMCs = c('default','AFSS', 'RWB'),
+##     summary = TRUE,
+##     burnin = nb,
+##     niter = ni
+## )
+## 
+## ZIP_Nmix_comparisons_all <- combine_MCMC_comparison_results(ZIP_Nmix_comparisons_JAGS[[1]],
+##                                                             ZIP_Nmix_comparisons[[1]])
+## 
+## make_MCMC_comparison_pages(ZIP_Nmix_comparisons_all,
+##                            "ZIP_Nmix_comparisons_all",
+##                            modelNames = "ZIP_Nmix")
+## 
+## ##browseURL(file.path("ZIP_Nmix_comparisons_all","ZIP_Nmix.html"))
+

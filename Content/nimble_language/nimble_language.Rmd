@@ -199,3 +199,4 @@ Example:
 
 # `nimbleList` #
 
+`nimbleList`s provide a data structure system that can move between the R and compiled NIMBLE worlds.  We will not introduce it right now.

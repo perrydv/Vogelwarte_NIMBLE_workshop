@@ -1,0 +1,35 @@
+---
+title: "Example: state-space model with house martin data"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
+    nimble_course_dir <- file.path(getwd(),'..')
+cur_dir <- getwd()
+setwd(file.path(nimble_course_dir,
+                 'examples_code',
+                 'state_space_house_martins'))
+source("state_space_house_martins_model.R")
+setwd(cur_dir)
+```
+
+- House martin abundance estimates from 1990-2009
+- 6 additional years of posterior prediction are included
+- The model is density-independent.
+- There are no covariates.
+- Process noise and observation error and both normal on a log scale.
+
+# Model code
+
+```{r house-martin-code}
+martin_code
+```

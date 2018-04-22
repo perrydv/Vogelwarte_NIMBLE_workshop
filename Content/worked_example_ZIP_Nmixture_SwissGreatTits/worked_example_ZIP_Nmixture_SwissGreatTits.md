@@ -1,0 +1,1568 @@
+---
+title: "Worked example of improving efficiency: Zero-inflated Poisson N-mixture model for Swiss Great Tits data"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+
+
+# Example: Swiss Great Tits
+
+This example is described [here](../examples_code/example_ZIP_Nmixture_great_tits/example_ZIP_Nmixture_great_tits_slides.Rmd)
+
+### Goals
+
+1. Look at whether the model can be re-written purely for computational efficiency (not mixing per se).
+2. Compare JAGS, NIMBLE with default samplers, and NIMBLE with different kinds of block samplers.
+
+# Observations about the model
+
+## Let's put the model code right here for reference:
+
+```r
+Section6p11_code
+```
+
+```
+## {
+##     phi ~ dunif(0, 1)
+##     theta <- 1 - phi
+##     ltheta <- logit(theta)
+##     beta0 ~ dnorm(0, 0.1)
+##     for (k in 1:7) {
+##         beta[k] ~ dnorm(0, 1)
+##     }
+##     tau.lam <- pow(sd.lam, -2)
+##     sd.lam ~ dunif(0, 2)
+##     for (j in 1:3) {
+##         alpha0[j] <- logit(mean.p[j])
+##         mean.p[j] ~ dunif(0, 1)
+##     }
+##     for (k in 1:13) {
+##         alpha[k] ~ dnorm(0, 1)
+##     }
+##     tau.p.site <- pow(sd.p.site, -2)
+##     sd.p.site ~ dunif(0, 2)
+##     tau.p.survey <- pow(sd.p.survey, -2)
+##     sd.p.survey ~ dunif(0, 2)
+##     for (i in 1:nsite) {
+##         a[i] ~ dbern(phi)
+##         eps.lam[i] ~ dnorm(0, tau.lam)
+##         loglam[i] <- beta0 + inprod(beta[1:7], lamDM[i, 1:7]) + 
+##             eps.lam[i] * hlam.on
+##         loglam.lim[i] <- min(250, max(-250, loglam[i]))
+##         lam[i] <- exp(loglam.lim[i])
+##         mu.poisson[i] <- a[i] * lam[i]
+##         N[i] ~ dpois(mu.poisson[i])
+##     }
+##     for (i in 1:nsite) {
+##         eps.p.site[i] ~ dnorm(0, tau.p.site)
+##         for (j in 1:nrep) {
+##             y[i, j] ~ dbin(p[i, j], N[i])
+##             p[i, j] <- 1/(1 + exp(-lp.lim[i, j]))
+##             lp.lim[i, j] <- min(250, max(-250, lp[i, j]))
+##             lp[i, j] <- alpha0[j] + alpha[1] * elev[i] + alpha[2] * 
+##                 elev2[i] + alpha[3] * date[i, j] + alpha[4] * 
+##                 date2[i, j] + alpha[5] * dur[i, j] + alpha[6] * 
+##                 dur2[i, j] + alpha[7] * elev[i] * date[i, j] + 
+##                 alpha[8] * elev2[i] * date[i, j] + alpha[9] * 
+##                 elev[i] * dur[i, j] + alpha[10] * elev[i] * dur2[i, 
+##                 j] + alpha[11] * elev2[i] * dur[i, j] + alpha[12] * 
+##                 date[i, j] * dur[i, j] + alpha[13] * date[i, 
+##                 j] * dur2[i, j] + eps.p.site[i] * hp.site.on + 
+##                 eps.p.survey[i, j] * hp.survey.on
+##             eps.p.survey[i, j] ~ dnorm(0, tau.p.survey)
+##         }
+##     }
+##     if (DO_POSTERIOR_PREDICTION) {
+##         for (i in 1:nsite) {
+##             for (j in 1:nrep) {
+##                 y.sim[i, j] ~ dbin(p[i, j], N[i])
+##                 e.count[i, j] <- N[i] * p[i, j]
+##                 chi2.actual[i, j] <- pow((y[i, j] - e.count[i, 
+##                   j]), 2)/(e.count[i, j] + e)
+##                 chi2.sim[i, j] <- pow((y.sim[i, j] - e.count[i, 
+##                   j]), 2)/(e.count[i, j] + e)
+##             }
+##         }
+##         fit.actual <- sum(chi2.actual[1:263, 1:3])
+##         fit.sim <- sum(chi2.sim[1:263, 1:3])
+##         bpv <- step(fit.sim - fit.actual)
+##         c.hat <- fit.actual/fit.sim
+##         Ntotal263 <- sum(N[1:263])
+##     }
+## }
+```
+
+```r
+DO_POSTERIOR_PREDICTION <- FALSE
+.GlobalEnv$DO_POSTERIOR_PREDICTION <- FALSE
+```
+
+- Let's do posterior predictions later.
+- How does software know about the "on" variables?
+- What nodes share the same dependencies?  Can anything be grouped / vectorized?
+
+# Try building the model. #
+
+
+```r
+m <- nimbleModel(Section6p11_code,
+                 constants = SGT_data1,
+                 inits = SGT_inits())
+```
+
+```
+## defining model...
+```
+
+```
+## Detected y as data within 'constants'.
+```
+
+```
+## Adding y,lamDM as data for building model.
+```
+
+```
+## building model...
+```
+
+```
+## setting data and initial values...
+```
+
+```
+## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.
+```
+
+```r
+## What is the warning about?
+m$initializeInfo()
+```
+
+```
+## Missing values (NAs) or non-finite values were found in model variables: phi, theta, ltheta, tau.lam, sd.lam, tau.p.site, sd.p.site, tau.p.survey, sd.p.survey, a, lifted_d1_over_sqrt_oPtau_dot_lam_cP, eps.lam, loglam, loglam.lim, lam, mu.poisson, lifted_d1_over_sqrt_oPtau_dot_p_dot_site_cP, eps.p.site, y, p, lp.lim, lp, lifted_d1_over_sqrt_oPtau_dot_p_dot_survey_cP, eps.p.survey. This is not an error, but some or all variables may need to be initialized for certain algorithms to operate properly. For more information on model initialization, see help(modelInitialization).
+```
+
+```r
+m$phi
+```
+
+```
+## [1] NA
+```
+
+```r
+head(m$eps.p.survey)
+```
+
+```
+##      [,1] [,2] [,3]
+## [1,]   NA   NA   NA
+## [2,]   NA   NA   NA
+## [3,]   NA   NA   NA
+## [4,]   NA   NA   NA
+## [5,]   NA   NA   NA
+## [6,]   NA   NA   NA
+```
+### Observations
+
+- We see not everything is initialized.
+- It is ok not to initialize everything, but NIMBLE and JAGS may have
+different complaints.
+- NIMBLE models can be initialized after creation, not just by `inits` argument.
+- We'll want more complete `inits` later that what was provided in the AHM code, so I wrote a more complete one in this example's source code.
+
+# Try building the model with more complete `inits`
+
+
+```r
+m2 <- nimbleModel(Section6p11_code,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+```
+
+```
+## defining model...
+```
+
+```
+## Detected y as data within 'constants'.
+```
+
+```
+## Adding y,lamDM as data for building model.
+```
+
+```
+## building model...
+```
+
+```
+## setting data and initial values...
+```
+
+```
+## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.
+```
+
+```r
+m2$initializeInfo()
+```
+
+```
+## Missing values (NAs) or non-finite values were found in model variables: y. This is not an error, but some or all variables may need to be initialized for certain algorithms to operate properly. For more information on model initialization, see help(modelInitialization).
+```
+
+```r
+## The only nodes left not initialized are parts of y
+m2$y
+```
+
+```
+##       rep
+## site    1  2  3
+##   Q001 25 16 16
+##   Q002 20 10 12
+##   Q003  4  4  1
+##   Q004 12 11  6
+##   Q005  0  1  0
+##   Q006  4  1  4
+##   Q007 12 11  4
+##   Q008  7 10  5
+##   Q009 10 14  4
+##   Q010  5  6  6
+##   Q011  4  3  1
+##   Q012 13 15 11
+##   Q013  6  3  3
+##   Q014 16 23 18
+##   Q015  6  4  6
+##   Q016 11  4  6
+##   Q017  8  7  6
+##   Q018  3  9  3
+##   Q019  9  2  2
+##   Q020 14 12  8
+##   Q021 35 35 23
+##   Q022  4  5  7
+##   Q023  7  7  9
+##   Q024 10  4 15
+##   Q025  0  0  1
+##   Q026 19 10  6
+##   Q027  7  5  3
+##   Q028  0  0  0
+##   Q029  5  0  1
+##   Q030  2  3  3
+##   Q031 13 13 15
+##   Q032 10  5  3
+##   Q033  7  2  4
+##   Q034 10 13  8
+##   Q035  1  3  4
+##   Q036  4  3  3
+##   Q037 11 12 10
+##   Q038 11  8  9
+##   Q039  6  0  2
+##   Q040  3  7  7
+##   Q041  6  5  3
+##   Q042 15 14  9
+##   Q043  1  1 NA
+##   Q044  0  0  0
+##   Q045  0  1  0
+##   Q046  0  0 NA
+##   Q047  2  2  1
+##   Q048  8  6  4
+##   Q049  0  0 NA
+##   Q050  4  3  0
+##   Q051  0  0 NA
+##   Q052  4  6  5
+##   Q053  1  0  0
+##   Q054 28 22 12
+##   Q055  8 10  3
+##   Q056  0  0  0
+##   Q057 10 10  4
+##   Q058 15  9  7
+##   Q059 16  9 12
+##   Q060 16 17 16
+##   Q061 13 13 13
+##   Q062  3  1  1
+##   Q063  0  0 NA
+##   Q064  1  0  0
+##   Q065  5  1  1
+##   Q066  4  7  8
+##   Q067  7  1  0
+##   Q068  5  6  3
+##   Q069 14 14 11
+##   Q070  4  0  5
+##   Q071 15 12 11
+##   Q072  4  5  0
+##   Q073 27 21 16
+##   Q074  0  0 NA
+##   Q075  0  0 NA
+##   Q076  4  5  2
+##   Q077  5  4 11
+##   Q078 10  5  3
+##   Q079 14 10 11
+##   Q080 29 12 11
+##   Q081  9  9  8
+##   Q082  0  0 NA
+##   Q083  8  5  2
+##   Q084  0  0 NA
+##   Q085  0  0 NA
+##   Q086  0  0 NA
+##   Q087  3  6  2
+##   Q088  8  5  7
+##   Q089  9  7  9
+##   Q090  8 14  4
+##   Q091  0  1  0
+##   Q092  0  0  0
+##   Q093  0  0  0
+##   Q094  0  0  0
+##   Q095  1  1  0
+##   Q096  8  6  2
+##   Q097 24 14 17
+##   Q098 13 11  9
+##   Q099 11 12  9
+##   Q100  0  0 NA
+##   Q101  3  5  4
+##   Q102  0  0  0
+##   Q103  8 10  9
+##   Q104 19 18 13
+##   Q105  8  6  7
+##   Q106  8  7  5
+##   Q107 16 24 14
+##   Q108  1  1  2
+##   Q109  0  2  2
+##   Q110  7  9  4
+##   Q111  1  0  0
+##   Q112 15  7  3
+##   Q113  0  0 NA
+##   Q114  0  0 NA
+##   Q115 23  9 14
+##   Q116  1  0  0
+##   Q117  8 11  4
+##   Q118  1  3  2
+##   Q120  0  0  0
+##   Q121  0  0  0
+##   Q122  0  0  0
+##   Q123  0  0 NA
+##   Q124 12  9 10
+##   Q125 10  4 12
+##   Q126  5  7  5
+##   Q127 11 19 13
+##   Q128  0  0  0
+##   Q129  8  4  6
+##   Q130 25 17 11
+##   Q131  2  1  0
+##   Q132 15  5 15
+##   Q133  8  5  6
+##   Q134 14  6  5
+##   Q135 15 15 11
+##   Q136  5  2  1
+##   Q137  5  5  2
+##   Q138 12  6  7
+##   Q139  8 14  9
+##   Q140 18 19 15
+##   Q141 14 10  9
+##   Q142  0  0 NA
+##   Q143 25 25 13
+##   Q144  0  0  0
+##   Q145  0  0 NA
+##   Q146 13 12 13
+##   Q147 17  8 10
+##   Q148 18  6  6
+##   Q149 14 19  8
+##   Q150  0  0 NA
+##   Q151  2  6  6
+##   Q152  0  0 NA
+##   Q153  0  0  0
+##   Q154 13 12  9
+##   Q155 13  8  6
+##   Q156 13  7  7
+##   Q157  0  0 NA
+##   Q158 10  8  5
+##   Q159  0  0 NA
+##   Q161 17 12 23
+##   Q162 24 15 18
+##   Q163 26 22 24
+##   Q164  0  0  0
+##   Q165  9  7  6
+##   Q166 19 11 16
+##   Q167  0  0  0
+##   Q168  3  4  1
+##   Q169  0  0 NA
+##   Q170  8  7  6
+##   Q171 19 16 13
+##   Q172  7  6  4
+##   Q173  8  6  5
+##   Q174 33 33 18
+##   Q175  0  0 NA
+##   Q176  0  0 NA
+##   Q177  0  2  0
+##   Q178 16 12 10
+##   Q179 12 10  9
+##   Q180 25 15 18
+##   Q181  0  0  0
+##   Q182  0  0  0
+##   Q183  0  0  0
+##   Q184 34 32 18
+##   Q185  0  0 NA
+##   Q186  0  0 NA
+##   Q187  0  0 NA
+##   Q189  0  0  0
+##   Q190 10 15 12
+##   Q191  1  1  1
+##   Q192  0  0 NA
+##   Q193 11 11  6
+##   Q194 35 27 30
+##   Q195 21 14 18
+##   Q196 17 13 14
+##   Q197 18 14 17
+##   Q198 15  8 16
+##   Q199 13 16 10
+##   Q200  0  0  0
+##   Q201 15 18  7
+##   Q202  0  1  0
+##   Q203  9  6  4
+##   Q204  0  0  0
+##   Q205  0  0 NA
+##   Q206  0  0 NA
+##   Q207  3  2  1
+##   Q208  0  0  0
+##   Q209  3  0  0
+##   Q210  1  0  3
+##   Q211 21 13 12
+##   Q212 24 10  7
+##   Q213 41 31 22
+##   Q214  0  3  2
+##   Q215  0  0  0
+##   Q216 12 12  7
+##   Q217 26 24 20
+##   Q218 18 23 19
+##   Q219  7  7  6
+##   Q220  2  4  3
+##   Q221  0  0 NA
+##   Q222 30 38 21
+##   Q223  0  0  0
+##   Q224  0  0 NA
+##   Q225 14 17 12
+##   Q226 20 21 13
+##   Q227  1  0 NA
+##   Q228  2  4  2
+##   Q229  1  1  1
+##   Q230  4  4  3
+##   Q231  0  0  0
+##   Q232  0  0  0
+##   Q233  3  0  2
+##   Q234 21 13  5
+##   Q235  0  0 NA
+##   Q236  7  4  5
+##   Q237  5  7  6
+##   Q238  0  0  0
+##   Q239  0  0  0
+##   Q240 16 12 13
+##   Q241  1  2  0
+##   Q242 14  5  3
+##   Q243 31 24 16
+##   Q244  1  1 NA
+##   Q245  4  1  2
+##   Q246 20 16 15
+##   Q247  2  6  6
+##   Q249  0  0 NA
+##   Q250  1  4 NA
+##   Q251  0  0 NA
+##   Q252  0  0 NA
+##   Q253  6  4  7
+##   Q254  7  4 NA
+##   Q255  0  0 NA
+##   Q256  0  0 NA
+##   Q257  0  0 NA
+##   Q258  0  0  0
+##   Q259  0  0 NA
+##   Q260  0  0 NA
+##   Q261  0  0  0
+##   Q262  1  0  0
+##   Q263  0  0  0
+##   Q264  0  2  0
+##   Q265  0  0 NA
+##   Q266  3  2  4
+##   Q267  9  5  2
+```
+
+```r
+## The missing data are ok: they are really missing y values from rep 3.
+## Note, in this case we don't need these sampled, but they will be.
+```
+
+# Measure the computational cost of the model
+
+
+```r
+MCMC2 <- buildMCMC(m2)
+compiled2 <- compileNimble(m2, MCMC2)
+```
+
+```
+## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
+```
+
+```
+## compilation finished.
+```
+
+```r
+## We want to start timing the MCMC
+system.time(compiled2$MCMC2$run(20))
+```
+
+```
+##    user  system elapsed 
+##   0.085   0.000   0.085
+```
+
+```r
+## We see reports of an initialization problem,
+## so let's do some manual calculation
+compiled2$m2$calculate()
+```
+
+```
+## [1] -4490.626
+```
+
+```r
+## We see the compiled model is now fully
+## intialized and has a valid total logProb.
+m2$calculate()
+```
+
+```
+## [1] NA
+```
+
+```r
+## We see the uncompiled model (with original inits)
+## does not give a valid logProb.
+m2$logProb_y
+```
+
+```
+##               [,1]        [,2]        [,3]
+##   [1,] -14.7637302  -2.5363976  -2.5363976
+##   [2,] -11.5115684  -1.7826723  -1.9649939
+##   [3,]  -1.8562980  -1.8562980  -1.8562980
+##   [4,]  -6.4459640  -4.6542045  -1.5631621
+##   [5,]  -1.3862944  -0.6931472  -1.3862944
+##   [6,]  -1.8562980  -1.8562980  -1.8562980
+##   [7,]  -6.4459640  -4.6542045  -2.4386308
+##   [8,]  -1.8255263  -5.2267237  -1.4890541
+##   [9,]  -2.3898406  -7.6891575  -3.1782980
+##  [10,]  -1.8075078  -2.9061201  -2.9061201
+##  [11,]  -1.8562980  -1.1631508  -1.8562980
+##  [12,]  -4.7624181  -8.3177662  -2.7082944
+##  [13,]  -2.9061201  -1.2966822  -1.2966822
+##  [14,]  -3.1272659 -13.4574785  -4.8254994
+##  [15,]  -2.9061201  -1.2966822  -2.9061201
+##  [16,]  -5.8328595  -2.1132084  -1.4890541
+##  [17,]  -4.0411000  -2.6548057  -1.8075078
+##  [18,]  -2.1439801  -4.6288867  -2.1439801
+##  [19,]  -4.6288867  -3.1248093  -3.1248093
+##  [20,]  -7.6891575  -4.2769103  -1.6277006
+##  [21,] -21.3697796 -21.3697796  -3.3924434
+##  [22,]  -1.2966822  -1.5198258  -3.4657359
+##  [23,]  -2.1439801  -2.1439801  -4.6288867
+##  [24,]  -2.1021586  -3.5837631  -8.3177662
+##  [25,]  -1.3862944  -1.3862944  -0.6931472
+##  [26,] -10.8672113  -1.7361523  -3.2977995
+##  [27,]  -3.4657359  -1.5198258  -1.5198258
+##  [28,]  -0.6931472  -0.6931472  -0.6931472
+##  [29,]  -2.3671236  -4.1588831  -2.3671236
+##  [30,]  -0.9808293  -1.3862944  -1.3862944
+##  [31,]  -4.7624181  -4.7624181  -8.3177662
+##  [32,]  -5.2267237  -1.4890541  -2.5186735
+##  [33,]  -3.4657359  -2.2129729  -1.2966822
+##  [34,]  -2.7953057  -7.0650032  -1.6966935
+##  [35,]  -1.8562980  -1.1631508  -1.8562980
+##  [36,]  -1.8562980  -1.1631508  -1.1631508
+##  [37,]  -4.6542045  -6.4459640  -3.3549215
+##  [38,]  -5.8328595  -2.1132084  -2.9241386
+##  [39,]  -2.9061201  -4.8520303  -1.8075078
+##  [40,]  -1.5198258  -3.4657359  -3.4657359
+##  [41,]  -2.9061201  -1.8075078  -1.2966822
+##  [42,]  -8.3177662  -6.3028631  -1.7454836
+##  [43,]  -0.6931472  -0.6931472          NA
+##  [44,]  -0.6931472  -0.6931472  -0.6931472
+##  [45,]  -1.3862944  -0.6931472  -1.3862944
+##  [46,]  -0.6931472  -0.6931472          NA
+##  [47,]  -0.9808293  -0.9808293  -0.9808293
+##  [48,]  -4.0411000  -1.8075078  -1.4020427
+##  [49,]  -0.6931472  -0.6931472          NA
+##  [50,]  -1.8562980  -1.1631508  -3.4657359
+##  [51,]  -0.6931472  -0.6931472          NA
+##  [52,]  -1.2966822  -2.9061201  -1.8075078
+##  [53,]  -0.6931472  -1.3862944  -1.3862944
+##  [54,] -16.7339724  -5.8405720  -2.3365172
+##  [55,]  -2.5186735  -5.2267237  -2.5186735
+##  [56,]  -0.6931472  -0.6931472  -0.6931472
+##  [57,]  -5.2267237  -5.2267237  -1.8255263
+##  [58,]  -8.3177662  -1.7454836  -1.7454836
+##  [59,]  -8.9502887  -1.6848590  -3.0531349
+##  [60,]  -7.4462113  -9.5862775  -7.4462113
+##  [61,]  -7.0650032  -7.0650032  -7.0650032
+##  [62,]  -1.3862944  -1.3862944  -1.3862944
+##  [63,]  -0.6931472  -0.6931472          NA
+##  [64,]  -0.6931472  -1.3862944  -1.3862944
+##  [65,]  -2.3671236  -2.3671236  -2.3671236
+##  [66,]  -1.4020427  -2.6548057  -4.0411000
+##  [67,]  -3.4657359  -3.4657359  -5.5451774
+##  [68,]  -1.8075078  -2.9061201  -1.2966822
+##  [69,]  -7.6891575  -7.6891575  -3.1782980
+##  [70,]  -1.4508329  -4.1588831  -2.3671236
+##  [71,]  -8.3177662  -3.5837631  -2.7082944
+##  [72,]  -1.4508329  -2.3671236  -4.1588831
+##  [73,] -16.0759165  -5.4236782  -2.1774525
+##  [74,]  -0.6931472  -0.6931472          NA
+##  [75,]  -0.6931472  -0.6931472          NA
+##  [76,]  -1.4508329  -2.3671236  -1.4508329
+##  [77,]  -1.6432048  -2.1132084  -5.8328595
+##  [78,]  -5.2267237  -1.4890541  -2.5186735
+##  [79,]  -7.6891575  -2.3898406  -3.1782980
+##  [80,] -17.3932180  -2.5188388  -2.9783711
+##  [81,]  -4.6288867  -4.6288867  -3.1248093
+##  [82,]  -0.6931472  -0.6931472          NA
+##  [83,]  -4.0411000  -1.4020427  -2.6548057
+##  [84,]  -0.6931472  -0.6931472          NA
+##  [85,]  -0.6931472  -0.6931472          NA
+##  [86,]  -0.6931472  -0.6931472          NA
+##  [87,]  -1.2966822  -2.9061201  -1.8075078
+##  [88,]  -4.0411000  -1.4020427  -2.6548057
+##  [89,]  -4.6288867  -2.1439801  -4.6288867
+##  [90,]  -1.6277006  -7.6891575  -3.1782980
+##  [91,]  -1.3862944  -0.6931472  -1.3862944
+##  [92,]  -0.6931472  -0.6931472  -0.6931472
+##  [93,]  -0.6931472  -0.6931472  -0.6931472
+##  [94,]  -0.6931472  -0.6931472  -0.6931472
+##  [95,]  -0.6931472  -0.6931472  -1.3862944
+##  [96,]  -4.0411000  -1.8075078  -2.6548057
+##  [97,] -14.1098037  -2.0186033  -3.4347506
+##  [98,]  -7.0650032  -3.8069067  -2.1021586
+##  [99,]  -4.6542045  -6.4459640  -2.4386308
+## [100,]  -0.6931472  -0.6931472          NA
+## [101,]  -1.1631508  -2.3671236  -1.4508329
+## [102,]  -0.6931472  -0.6931472  -0.6931472
+## [103,]  -2.5186735  -5.2267237  -3.6172858
+## [104,] -10.8672113  -8.6159195  -2.6046524
+## [105,]  -4.0411000  -1.8075078  -2.6548057
+## [106,]  -4.0411000  -2.6548057  -1.4020427
+## [107,]  -2.7987619 -14.1098037  -2.0186033
+## [108,]  -0.9808293  -0.9808293  -0.9808293
+## [109,]  -2.0794415  -0.9808293  -0.9808293
+## [110,]  -2.1439801  -4.6288867  -1.5843643
+## [111,]  -0.6931472  -1.3862944  -1.3862944
+## [112,]  -8.3177662  -1.7454836  -4.7624181
+## [113,]  -0.6931472  -0.6931472          NA
+## [114,]  -0.6931472  -0.6931472          NA
+## [115,] -13.4574785  -2.5519018  -2.1464367
+## [116,]  -0.6931472  -1.3862944  -1.3862944
+## [117,]  -2.1132084  -5.8328595  -2.1132084
+## [118,]  -1.3862944  -1.3862944  -0.9808293
+## [119,]  -0.6931472  -0.6931472  -0.6931472
+## [120,]  -0.6931472  -0.6931472  -0.6931472
+## [121,]  -0.6931472  -0.6931472  -0.6931472
+## [122,]  -0.6931472  -0.6931472          NA
+## [123,]  -6.4459640  -2.4386308  -3.3549215
+## [124,]  -3.3549215  -2.4386308  -6.4459640
+## [125,]  -1.5198258  -3.4657359  -1.5198258
+## [126,]  -1.8314625 -10.8672113  -2.6046524
+## [127,]  -0.6931472  -0.6931472  -0.6931472
+## [128,]  -4.0411000  -1.4020427  -1.8075078
+## [129,] -14.7637302  -3.0670259  -2.1617042
+## [130,]  -0.9808293  -0.9808293  -2.0794415
+## [131,]  -8.3177662  -2.7082944  -8.3177662
+## [132,]  -4.0411000  -1.4020427  -1.8075078
+## [133,]  -7.6891575  -1.8790150  -2.3898406
+## [134,]  -8.3177662  -8.3177662  -2.7082944
+## [135,]  -2.3671236  -1.4508329  -2.3671236
+## [136,]  -2.3671236  -2.3671236  -1.4508329
+## [137,]  -6.4459640  -1.5631621  -1.5631621
+## [138,]  -1.6277006  -7.6891575  -1.8790150
+## [139,]  -8.6159195 -10.8672113  -4.2140903
+## [140,]  -7.6891575  -2.3898406  -1.8790150
+## [141,]  -0.6931472  -0.6931472          NA
+## [142,] -14.7637302 -14.7637302  -1.8644526
+## [143,]  -0.6931472  -0.6931472  -0.6931472
+## [144,]  -0.6931472  -0.6931472          NA
+## [145,]  -7.0650032  -5.1932010  -7.0650032
+## [146,]  -9.5862775  -1.7902195  -1.7902195
+## [147,] -10.2253575  -2.9613273  -2.9613273
+## [148,]  -3.2977995 -10.8672113  -2.1191445
+## [149,]  -0.6931472  -0.6931472          NA
+## [150,]  -1.8075078  -2.9061201  -2.9061201
+## [151,]  -0.6931472  -0.6931472          NA
+## [152,]  -0.6931472  -0.6931472  -0.6931472
+## [153,]  -7.0650032  -5.1932010  -2.1021586
+## [154,]  -7.0650032  -1.6966935  -1.6966935
+## [155,]  -7.0650032  -1.5631621  -1.5631621
+## [156,]  -0.6931472  -0.6931472          NA
+## [157,]  -5.2267237  -2.5186735  -1.4890541
+## [158,]  -0.6931472  -0.6931472          NA
+## [159,]  -3.8810377  -1.8252319 -13.4574785
+## [160,] -14.1098037  -2.3287582  -4.2456809
+## [161,] -15.4191370  -7.4161083 -10.7339241
+## [162,]  -0.6931472  -0.6931472  -0.6931472
+## [163,]  -4.6288867  -2.1439801  -1.5843643
+## [164,] -10.8672113  -1.8314625  -5.3772411
+## [165,]  -0.6931472  -0.6931472  -0.6931472
+## [166,]  -1.1631508  -1.8562980  -1.8562980
+## [167,]  -0.6931472  -0.6931472          NA
+## [168,]  -4.0411000  -2.6548057  -1.8075078
+## [169,] -10.8672113  -5.3772411  -2.6046524
+## [170,]  -3.4657359  -2.2129729  -1.2966822
+## [171,]  -4.0411000  -1.8075078  -1.4020427
+## [172,] -20.0406436 -20.0406436  -2.0534819
+## [173,]  -0.6931472  -0.6931472          NA
+## [174,]  -0.6931472  -0.6931472          NA
+## [175,]  -2.0794415  -0.9808293  -2.0794415
+## [176,]  -8.9502887  -3.0531349  -1.9080026
+## [177,]  -6.4459640  -3.3549215  -2.4386308
+## [178,] -14.7637302  -2.1617042  -3.7601730
+## [179,]  -0.6931472  -0.6931472  -0.6931472
+## [180,]  -0.6931472  -0.6931472  -0.6931472
+## [181,]  -0.6931472  -0.6931472  -0.6931472
+## [182,] -20.7048033 -15.4736946  -2.0244944
+## [183,]  -0.6931472  -0.6931472          NA
+## [184,]  -0.6931472  -0.6931472          NA
+## [185,]  -0.6931472  -0.6931472          NA
+## [186,]  -0.6931472  -0.6931472  -0.6931472
+## [187,]  -2.1021586  -8.3177662  -3.5837631
+## [188,]  -0.6931472  -0.6931472  -0.6931472
+## [189,]  -0.6931472  -0.6931472          NA
+## [190,]  -5.8328595  -5.8328595  -1.4890541
+## [191,] -21.3697796  -6.5929701 -10.4710915
+## [192,] -12.1581955  -2.5738807  -6.3515557
+## [193,]  -9.5862775  -3.4208596  -4.4504791
+## [194,] -10.2253575  -3.8086252  -8.0281329
+## [195,]  -6.8708472  -1.6848590  -8.9502887
+## [196,]  -4.0086463  -8.9502887  -1.9080026
+## [197,]  -0.6931472  -0.6931472  -0.6931472
+## [198,]  -4.9072375 -10.2253575  -2.3422881
+## [199,]  -1.3862944  -0.6931472  -1.3862944
+## [200,]  -4.6288867  -1.5843643  -1.5843643
+## [201,]  -0.6931472  -0.6931472  -0.6931472
+## [202,]  -0.6931472  -0.6931472          NA
+## [203,]  -0.6931472  -0.6931472          NA
+## [204,]  -1.3862944  -0.9808293  -1.3862944
+## [205,]  -0.6931472  -0.6931472  -0.6931472
+## [206,]  -1.3862944  -2.7725887  -2.7725887
+## [207,]  -1.3862944  -2.7725887  -1.3862944
+## [208,] -12.1581955  -2.1320480  -1.8696837
+## [209,] -14.1098037  -2.3287582  -4.2456809
+## [210,] -25.3745120  -6.9348316  -2.1470980
+## [211,]  -2.7725887  -1.3862944  -0.9808293
+## [212,]  -0.6931472  -0.6931472  -0.6931472
+## [213,]  -6.4459640  -6.4459640  -1.5631621
+## [214,] -15.4191370 -10.7339241  -5.0182131
+## [215,]  -4.8254994 -13.4574785  -5.9781789
+## [216,]  -3.4657359  -3.4657359  -2.2129729
+## [217,]  -1.1631508  -1.8562980  -1.1631508
+## [218,]  -0.6931472  -0.6931472          NA
+## [219,]  -7.8610436 -23.3691784  -2.1765639
+## [220,]  -0.6931472  -0.6931472  -0.6931472
+## [221,]  -0.6931472  -0.6931472          NA
+## [222,]  -4.4504791  -9.5862775  -2.6476697
+## [223,]  -9.8068203 -12.1581955  -2.1320480
+## [224,]  -0.6931472  -1.3862944          NA
+## [225,]  -1.1631508  -1.8562980  -1.1631508
+## [226,]  -0.6931472  -0.6931472  -0.6931472
+## [227,]  -1.8562980  -1.8562980  -1.1631508
+## [228,]  -0.6931472  -0.6931472  -0.6931472
+## [229,]  -0.6931472  -0.6931472  -0.6931472
+## [230,]  -1.3862944  -2.7725887  -0.9808293
+## [231,] -12.1581955  -2.1320480  -5.0706218
+## [232,]  -0.6931472  -0.6931472          NA
+## [233,]  -3.4657359  -1.2966822  -1.5198258
+## [234,]  -1.5198258  -3.4657359  -2.2129729
+## [235,]  -0.6931472  -0.6931472  -0.6931472
+## [236,]  -0.6931472  -0.6931472  -0.6931472
+## [237,]  -8.9502887  -3.0531349  -4.0086463
+## [238,]  -0.9808293  -0.9808293  -2.0794415
+## [239,]  -7.6891575  -2.3898406  -4.2769103
+## [240,] -18.7149739  -6.0120826  -1.9664705
+## [241,]  -0.6931472  -0.6931472          NA
+## [242,]  -1.8562980  -1.8562980  -1.1631508
+## [243,] -11.5115684  -4.6353037  -3.6544745
+## [244,]  -1.8075078  -2.9061201  -2.9061201
+## [245,]  -0.6931472  -0.6931472          NA
+## [246,]  -1.8562980  -1.8562980          NA
+## [247,]  -0.6931472  -0.6931472          NA
+## [248,]  -0.6931472  -0.6931472          NA
+## [249,]  -2.2129729  -1.2966822  -3.4657359
+## [250,]  -3.4657359  -1.2966822          NA
+## [251,]  -0.6931472  -0.6931472          NA
+## [252,]  -0.6931472  -0.6931472          NA
+## [253,]  -0.6931472  -0.6931472          NA
+## [254,]  -0.6931472  -0.6931472  -0.6931472
+## [255,]  -0.6931472  -0.6931472          NA
+## [256,]  -0.6931472  -0.6931472          NA
+## [257,]  -0.6931472  -0.6931472  -0.6931472
+## [258,]  -0.6931472  -1.3862944  -1.3862944
+## [259,]  -0.6931472  -0.6931472  -0.6931472
+## [260,]  -2.0794415  -0.9808293  -2.0794415
+## [261,]  -0.6931472  -0.6931472          NA
+## [262,]  -1.1631508  -1.1631508  -1.8562980
+## [263,]  -4.6288867  -1.4020427  -3.1248093
+```
+
+```r
+## We see the problem is missing parts of y
+m2$calculate("y")
+```
+
+```
+## [1] NA
+```
+
+```r
+## Indeed, calculating logProbs just of y gives NA
+compiled2$m2$calculate("y")
+```
+
+```
+## [1] -1452.28
+```
+
+```r
+## But again the compiled model is ok after
+## MCMC initialization.
+
+## Conclusion: What we see is that elements of y that are missing
+## data make the model start with invalid log probability.
+## That may not be a problem.  Those nodes will be
+## initialized from their priors, so if those give decent
+## values, there will be no problem.
+## more later.  For now, we will move on.
+
+## We do not want timing results to involve NAs or NaNs,
+## since those typically engage special-case processing.
+## So let's start timing again and time 200 iterations.
+t2_200 <- system.time(compiled2$MCMC2$run(200))
+```
+
+```
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+```
+
+```r
+t2_200
+```
+
+```
+##    user  system elapsed 
+##   0.893   0.000   0.893
+```
+
+```r
+# 50000 samples would take
+(t2_200 * 50000 / 200)/60
+```
+
+```
+##     user   system  elapsed 
+## 3.720833 0.000000 3.720833
+```
+
+```r
+# a little under 4 minutes
+```
+
+# Turn off sampling on nodes that are "off" in the model and measure computational cost.
+
+
+```r
+m3 <- nimbleModel(Section6p11_code,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+```
+
+```
+## defining model...
+```
+
+```
+## Detected y as data within 'constants'.
+```
+
+```
+## Adding y,lamDM as data for building model.
+```
+
+```
+## building model...
+```
+
+```
+## setting data and initial values...
+```
+
+```
+## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.
+```
+
+```r
+MCMCconf3 <- configureMCMC(m3)
+## Sampling effort is being wasted on the nodes that are "off" in the model:
+MCMCconf3$printSamplers("eps.lam")
+```
+
+```
+## [292] RW sampler: eps.lam[1]
+## [293] RW sampler: eps.lam[2]
+## [294] RW sampler: eps.lam[3]
+## [295] RW sampler: eps.lam[4]
+## [296] RW sampler: eps.lam[5]
+## [297] RW sampler: eps.lam[6]
+## [298] RW sampler: eps.lam[7]
+## [299] RW sampler: eps.lam[8]
+## [300] RW sampler: eps.lam[9]
+## [301] RW sampler: eps.lam[10]
+## [302] RW sampler: eps.lam[11]
+## [303] RW sampler: eps.lam[12]
+## [304] RW sampler: eps.lam[13]
+## [305] RW sampler: eps.lam[14]
+## [306] RW sampler: eps.lam[15]
+## [307] RW sampler: eps.lam[16]
+## [308] RW sampler: eps.lam[17]
+## [309] RW sampler: eps.lam[18]
+## [310] RW sampler: eps.lam[19]
+## [311] RW sampler: eps.lam[20]
+## [312] RW sampler: eps.lam[21]
+## [313] RW sampler: eps.lam[22]
+## [314] RW sampler: eps.lam[23]
+## [315] RW sampler: eps.lam[24]
+## [316] RW sampler: eps.lam[25]
+## [317] RW sampler: eps.lam[26]
+## [318] RW sampler: eps.lam[27]
+## [319] RW sampler: eps.lam[28]
+## [320] RW sampler: eps.lam[29]
+## [321] RW sampler: eps.lam[30]
+## [322] RW sampler: eps.lam[31]
+## [323] RW sampler: eps.lam[32]
+## [324] RW sampler: eps.lam[33]
+## [325] RW sampler: eps.lam[34]
+## [326] RW sampler: eps.lam[35]
+## [327] RW sampler: eps.lam[36]
+## [328] RW sampler: eps.lam[37]
+## [329] RW sampler: eps.lam[38]
+## [330] RW sampler: eps.lam[39]
+## [331] RW sampler: eps.lam[40]
+## [332] RW sampler: eps.lam[41]
+## [333] RW sampler: eps.lam[42]
+## [334] RW sampler: eps.lam[43]
+## [335] RW sampler: eps.lam[44]
+## [336] RW sampler: eps.lam[45]
+## [337] RW sampler: eps.lam[46]
+## [338] RW sampler: eps.lam[47]
+## [339] RW sampler: eps.lam[48]
+## [340] RW sampler: eps.lam[49]
+## [341] RW sampler: eps.lam[50]
+## [342] RW sampler: eps.lam[51]
+## [343] RW sampler: eps.lam[52]
+## [344] RW sampler: eps.lam[53]
+## [345] RW sampler: eps.lam[54]
+## [346] RW sampler: eps.lam[55]
+## [347] RW sampler: eps.lam[56]
+## [348] RW sampler: eps.lam[57]
+## [349] RW sampler: eps.lam[58]
+## [350] RW sampler: eps.lam[59]
+## [351] RW sampler: eps.lam[60]
+## [352] RW sampler: eps.lam[61]
+## [353] RW sampler: eps.lam[62]
+## [354] RW sampler: eps.lam[63]
+## [355] RW sampler: eps.lam[64]
+## [356] RW sampler: eps.lam[65]
+## [357] RW sampler: eps.lam[66]
+## [358] RW sampler: eps.lam[67]
+## [359] RW sampler: eps.lam[68]
+## [360] RW sampler: eps.lam[69]
+## [361] RW sampler: eps.lam[70]
+## [362] RW sampler: eps.lam[71]
+## [363] RW sampler: eps.lam[72]
+## [364] RW sampler: eps.lam[73]
+## [365] RW sampler: eps.lam[74]
+## [366] RW sampler: eps.lam[75]
+## [367] RW sampler: eps.lam[76]
+## [368] RW sampler: eps.lam[77]
+## [369] RW sampler: eps.lam[78]
+## [370] RW sampler: eps.lam[79]
+## [371] RW sampler: eps.lam[80]
+## [372] RW sampler: eps.lam[81]
+## [373] RW sampler: eps.lam[82]
+## [374] RW sampler: eps.lam[83]
+## [375] RW sampler: eps.lam[84]
+## [376] RW sampler: eps.lam[85]
+## [377] RW sampler: eps.lam[86]
+## [378] RW sampler: eps.lam[87]
+## [379] RW sampler: eps.lam[88]
+## [380] RW sampler: eps.lam[89]
+## [381] RW sampler: eps.lam[90]
+## [382] RW sampler: eps.lam[91]
+## [383] RW sampler: eps.lam[92]
+## [384] RW sampler: eps.lam[93]
+## [385] RW sampler: eps.lam[94]
+## [386] RW sampler: eps.lam[95]
+## [387] RW sampler: eps.lam[96]
+## [388] RW sampler: eps.lam[97]
+## [389] RW sampler: eps.lam[98]
+## [390] RW sampler: eps.lam[99]
+## [391] RW sampler: eps.lam[100]
+## [392] RW sampler: eps.lam[101]
+## [393] RW sampler: eps.lam[102]
+## [394] RW sampler: eps.lam[103]
+## [395] RW sampler: eps.lam[104]
+## [396] RW sampler: eps.lam[105]
+## [397] RW sampler: eps.lam[106]
+## [398] RW sampler: eps.lam[107]
+## [399] RW sampler: eps.lam[108]
+## [400] RW sampler: eps.lam[109]
+## [401] RW sampler: eps.lam[110]
+## [402] RW sampler: eps.lam[111]
+## [403] RW sampler: eps.lam[112]
+## [404] RW sampler: eps.lam[113]
+## [405] RW sampler: eps.lam[114]
+## [406] RW sampler: eps.lam[115]
+## [407] RW sampler: eps.lam[116]
+## [408] RW sampler: eps.lam[117]
+## [409] RW sampler: eps.lam[118]
+## [410] RW sampler: eps.lam[119]
+## [411] RW sampler: eps.lam[120]
+## [412] RW sampler: eps.lam[121]
+## [413] RW sampler: eps.lam[122]
+## [414] RW sampler: eps.lam[123]
+## [415] RW sampler: eps.lam[124]
+## [416] RW sampler: eps.lam[125]
+## [417] RW sampler: eps.lam[126]
+## [418] RW sampler: eps.lam[127]
+## [419] RW sampler: eps.lam[128]
+## [420] RW sampler: eps.lam[129]
+## [421] RW sampler: eps.lam[130]
+## [422] RW sampler: eps.lam[131]
+## [423] RW sampler: eps.lam[132]
+## [424] RW sampler: eps.lam[133]
+## [425] RW sampler: eps.lam[134]
+## [426] RW sampler: eps.lam[135]
+## [427] RW sampler: eps.lam[136]
+## [428] RW sampler: eps.lam[137]
+## [429] RW sampler: eps.lam[138]
+## [430] RW sampler: eps.lam[139]
+## [431] RW sampler: eps.lam[140]
+## [432] RW sampler: eps.lam[141]
+## [433] RW sampler: eps.lam[142]
+## [434] RW sampler: eps.lam[143]
+## [435] RW sampler: eps.lam[144]
+## [436] RW sampler: eps.lam[145]
+## [437] RW sampler: eps.lam[146]
+## [438] RW sampler: eps.lam[147]
+## [439] RW sampler: eps.lam[148]
+## [440] RW sampler: eps.lam[149]
+## [441] RW sampler: eps.lam[150]
+## [442] RW sampler: eps.lam[151]
+## [443] RW sampler: eps.lam[152]
+## [444] RW sampler: eps.lam[153]
+## [445] RW sampler: eps.lam[154]
+## [446] RW sampler: eps.lam[155]
+## [447] RW sampler: eps.lam[156]
+## [448] RW sampler: eps.lam[157]
+## [449] RW sampler: eps.lam[158]
+## [450] RW sampler: eps.lam[159]
+## [451] RW sampler: eps.lam[160]
+## [452] RW sampler: eps.lam[161]
+## [453] RW sampler: eps.lam[162]
+## [454] RW sampler: eps.lam[163]
+## [455] RW sampler: eps.lam[164]
+## [456] RW sampler: eps.lam[165]
+## [457] RW sampler: eps.lam[166]
+## [458] RW sampler: eps.lam[167]
+## [459] RW sampler: eps.lam[168]
+## [460] RW sampler: eps.lam[169]
+## [461] RW sampler: eps.lam[170]
+## [462] RW sampler: eps.lam[171]
+## [463] RW sampler: eps.lam[172]
+## [464] RW sampler: eps.lam[173]
+## [465] RW sampler: eps.lam[174]
+## [466] RW sampler: eps.lam[175]
+## [467] RW sampler: eps.lam[176]
+## [468] RW sampler: eps.lam[177]
+## [469] RW sampler: eps.lam[178]
+## [470] RW sampler: eps.lam[179]
+## [471] RW sampler: eps.lam[180]
+## [472] RW sampler: eps.lam[181]
+## [473] RW sampler: eps.lam[182]
+## [474] RW sampler: eps.lam[183]
+## [475] RW sampler: eps.lam[184]
+## [476] RW sampler: eps.lam[185]
+## [477] RW sampler: eps.lam[186]
+## [478] RW sampler: eps.lam[187]
+## [479] RW sampler: eps.lam[188]
+## [480] RW sampler: eps.lam[189]
+## [481] RW sampler: eps.lam[190]
+## [482] RW sampler: eps.lam[191]
+## [483] RW sampler: eps.lam[192]
+## [484] RW sampler: eps.lam[193]
+## [485] RW sampler: eps.lam[194]
+## [486] RW sampler: eps.lam[195]
+## [487] RW sampler: eps.lam[196]
+## [488] RW sampler: eps.lam[197]
+## [489] RW sampler: eps.lam[198]
+## [490] RW sampler: eps.lam[199]
+## [491] RW sampler: eps.lam[200]
+## [492] RW sampler: eps.lam[201]
+## [493] RW sampler: eps.lam[202]
+## [494] RW sampler: eps.lam[203]
+## [495] RW sampler: eps.lam[204]
+## [496] RW sampler: eps.lam[205]
+## [497] RW sampler: eps.lam[206]
+## [498] RW sampler: eps.lam[207]
+## [499] RW sampler: eps.lam[208]
+## [500] RW sampler: eps.lam[209]
+## [501] RW sampler: eps.lam[210]
+## [502] RW sampler: eps.lam[211]
+## [503] RW sampler: eps.lam[212]
+## [504] RW sampler: eps.lam[213]
+## [505] RW sampler: eps.lam[214]
+## [506] RW sampler: eps.lam[215]
+## [507] RW sampler: eps.lam[216]
+## [508] RW sampler: eps.lam[217]
+## [509] RW sampler: eps.lam[218]
+## [510] RW sampler: eps.lam[219]
+## [511] RW sampler: eps.lam[220]
+## [512] RW sampler: eps.lam[221]
+## [513] RW sampler: eps.lam[222]
+## [514] RW sampler: eps.lam[223]
+## [515] RW sampler: eps.lam[224]
+## [516] RW sampler: eps.lam[225]
+## [517] RW sampler: eps.lam[226]
+## [518] RW sampler: eps.lam[227]
+## [519] RW sampler: eps.lam[228]
+## [520] RW sampler: eps.lam[229]
+## [521] RW sampler: eps.lam[230]
+## [522] RW sampler: eps.lam[231]
+## [523] RW sampler: eps.lam[232]
+## [524] RW sampler: eps.lam[233]
+## [525] RW sampler: eps.lam[234]
+## [526] RW sampler: eps.lam[235]
+## [527] RW sampler: eps.lam[236]
+## [528] RW sampler: eps.lam[237]
+## [529] RW sampler: eps.lam[238]
+## [530] RW sampler: eps.lam[239]
+## [531] RW sampler: eps.lam[240]
+## [532] RW sampler: eps.lam[241]
+## [533] RW sampler: eps.lam[242]
+## [534] RW sampler: eps.lam[243]
+## [535] RW sampler: eps.lam[244]
+## [536] RW sampler: eps.lam[245]
+## [537] RW sampler: eps.lam[246]
+## [538] RW sampler: eps.lam[247]
+## [539] RW sampler: eps.lam[248]
+## [540] RW sampler: eps.lam[249]
+## [541] RW sampler: eps.lam[250]
+## [542] RW sampler: eps.lam[251]
+## [543] RW sampler: eps.lam[252]
+## [544] RW sampler: eps.lam[253]
+## [545] RW sampler: eps.lam[254]
+## [546] RW sampler: eps.lam[255]
+## [547] RW sampler: eps.lam[256]
+## [548] RW sampler: eps.lam[257]
+## [549] RW sampler: eps.lam[258]
+## [550] RW sampler: eps.lam[259]
+## [551] RW sampler: eps.lam[260]
+## [552] RW sampler: eps.lam[261]
+## [553] RW sampler: eps.lam[262]
+## [554] RW sampler: eps.lam[263]
+```
+
+```r
+## So let's remove those samplers
+MCMCconf3$removeSamplers("eps.lam")
+MCMCconf3$removeSamplers("eps.p.site")
+MCMCconf3$removeSamplers("eps.p.survey")
+MCMCconf3$removeSamplers("sd.lam")
+MCMCconf3$removeSamplers("sd.p.site")
+MCMCconf3$removeSamplers("sd.p.survey")
+MCMC3 <- buildMCMC(MCMCconf3)
+compiled3 <- compileNimble(m3, MCMC3)
+```
+
+```
+## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
+## compilation finished.
+```
+
+```r
+system.time(compiled3$MCMC$run(20)) ## get the NAs filled in before timing
+```
+
+```
+##    user  system elapsed 
+##   0.061   0.000   0.061
+```
+
+```r
+t3_200 <- system.time(compiled3$MCMC3$run(200))
+```
+
+```
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+```
+
+```r
+(t3_200 * 50000 / 200)/ 60
+```
+
+```
+##     user   system  elapsed 
+## 2.916667 0.000000 2.920833
+```
+
+```r
+# a little under 3 minutes
+```
+
+# Rewrite the model to vectorize (group) some calculations that always occur together.
+
+Here is a re-written version of the model:
+
+
+```r
+Section6p11_code_grouped
+```
+
+```
+## {
+##     phi ~ dunif(0, 1)
+##     theta <- 1 - phi
+##     ltheta <- logit(theta)
+##     beta0 ~ dnorm(0, 0.1)
+##     for (k in 1:7) {
+##         beta[k] ~ dnorm(0, 1)
+##     }
+##     tau.lam <- pow(sd.lam, -2)
+##     sd.lam ~ dunif(0, 2)
+##     for (j in 1:3) {
+##         alpha0[j] <- logit(mean.p[j])
+##         mean.p[j] ~ dunif(0, 1)
+##     }
+##     for (k in 1:13) {
+##         alpha[k] ~ dnorm(0, 1)
+##     }
+##     tau.p.site <- pow(sd.p.site, -2)
+##     sd.p.site ~ dunif(0, 2)
+##     tau.p.survey <- pow(sd.p.survey, -2)
+##     sd.p.survey ~ dunif(0, 2)
+##     loglam.fixed[1:nsite] <- beta0 + (lamDM[1:nsite, 1:7] %*% 
+##         beta[1:7])[1:nsite, 1]
+##     for (i in 1:nsite) {
+##         a[i] ~ dbern(phi)
+##         eps.lam[i] ~ dnorm(0, tau.lam)
+##         loglam[i] <- loglam.fixed[i] + eps.lam[i] * hlam.on
+##         loglam.lim[i] <- min(250, max(-250, loglam[i]))
+##         lam[i] <- exp(loglam.lim[i])
+##         mu.poisson[i] <- a[i] * lam[i]
+##         N[i] ~ dpois(mu.poisson[i])
+##     }
+##     for (j in 1:nrep) {
+##         lp.fixed[1:nsite, j] <- alpha0[j] + alpha[1] * elev[1:nsite] + 
+##             alpha[2] * elev2[1:nsite] + alpha[3] * date[1:nsite, 
+##             j] + alpha[4] * date2[1:nsite, j] + alpha[5] * dur[1:nsite, 
+##             j] + alpha[6] * dur2[1:nsite, j] + alpha[7] * elev[1:nsite] * 
+##             date[1:nsite, j] + alpha[8] * elev2[1:nsite] * date[1:nsite, 
+##             j] + alpha[9] * elev[1:nsite] * dur[1:nsite, j] + 
+##             alpha[10] * elev[1:nsite] * dur2[1:nsite, j] + alpha[11] * 
+##             elev2[1:nsite] * dur[1:nsite, j] + alpha[12] * date[1:nsite, 
+##             j] * dur[1:nsite, j] + alpha[13] * date[1:nsite, 
+##             j] * dur2[1:nsite, j]
+##     }
+##     for (i in 1:nsite) {
+##         eps.p.site[i] ~ dnorm(0, tau.p.site)
+##         for (j in 1:nrep) {
+##             y[i, j] ~ dbin(p[i, j], N[i])
+##             p[i, j] <- 1/(1 + exp(-lp.lim[i, j]))
+##             lp.lim[i, j] <- min(250, max(-250, lp[i, j]))
+##             lp[i, j] <- lp.fixed[i, j] + eps.p.site[i] * hp.site.on + 
+##                 eps.p.survey[i, j] * hp.survey.on
+##             eps.p.survey[i, j] ~ dnorm(0, tau.p.survey)
+##         }
+##     }
+##     if (DO_POSTERIOR_PREDICTION) {
+##         for (i in 1:nsite) {
+##             for (j in 1:nrep) {
+##                 y.sim[i, j] ~ dbin(p[i, j], N[i])
+##                 e.count[i, j] <- N[i] * p[i, j]
+##                 chi2.actual[i, j] <- pow((y[i, j] - e.count[i, 
+##                   j]), 2)/(e.count[i, j] + e)
+##                 chi2.sim[i, j] <- pow((y.sim[i, j] - e.count[i, 
+##                   j]), 2)/(e.count[i, j] + e)
+##             }
+##         }
+##         fit.actual <- sum(chi2.actual[1:263, 1:3])
+##         fit.sim <- sum(chi2.sim[1:263, 1:3])
+##         bpv <- step(fit.sim - fit.actual)
+##         c.hat <- fit.actual/fit.sim
+##         Ntotal263 <- sum(N[1:263])
+##     }
+## }
+```
+
+# Measure the computational cost of the re-written version.
+
+
+```r
+m4 <- nimbleModel(Section6p11_code_grouped,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+```
+
+```
+## defining model...
+```
+
+```
+## Detected y as data within 'constants'.
+```
+
+```
+## Adding y,lamDM,elev,date,dur,elev2,date2,dur2 as data for building model.
+```
+
+```
+## building model...
+```
+
+```
+## setting data and initial values...
+```
+
+```
+## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.
+```
+
+```r
+MCMCconf4 <- configureMCMC(m4)
+## Sampling effort is being wasted on the nodes that are "off" in the model:
+
+MCMCconf4$removeSamplers("eps.lam")
+MCMCconf4$removeSamplers("eps.p.site")
+MCMCconf4$removeSamplers("eps.p.survey")
+MCMCconf4$removeSamplers("sd.lam")
+MCMCconf4$removeSamplers("sd.p.site")
+MCMCconf4$removeSamplers("sd.p.survey")
+
+MCMC4 <- buildMCMC(MCMCconf4)
+compiled4 <- compileNimble(m4, MCMC4)
+```
+
+```
+## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
+## compilation finished.
+```
+
+```r
+system.time(compiled4$MCMC$run(20)) ## get the NAs filled in before timing
+```
+
+```
+##    user  system elapsed 
+##   0.066   0.000   0.065
+```
+
+```r
+t4_200 <- system.time(compiled4$MCMC$run(200))
+```
+
+```
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+```
+
+```r
+(t4_200 * 50000 / 200) / 60
+```
+
+```
+##        user      system     elapsed 
+## 2.850000000 0.004166667 2.850000000
+```
+
+```r
+# a little faster than above
+```
+
+# Conclusions on efficiency of rewriting the model
+
+- Sampling nodes not really needed is wasteful (JAGS can't avoid this.)
+
+    - Of course, this is understandable as a human pragmatism.
+
+- Separating and vectorizing some computations helps a bit, not a ton, in this case.
+
+# Try some MCMC comparisons
+
+- We want to include JAGS in a comparison.
+- We can't remove samplers on the unused part of the model in JAGS.
+- To be fair, we'll use a model with those parts removed directly from the model code.
+
+# Set up some NIMBLE sampler assignment functions
+
+Here are some functions we'll need
+
+
+```r
+if(DO_POSTERIOR_PREDICTION) {
+    params <- c("theta", "ltheta", "phi", "beta0", "beta", "sd.lam", "alpha0", "mean.p", "alpha", "sd.p.site", "sd.p.survey", "fit.actual", "fit.sim", "bpv", "c.hat", "Ntotal263")
+} else {
+    params <- c("theta", "ltheta", "phi", "beta0", "beta", "alpha0", "mean.p", "alpha")
+}
+
+removeUnusedSamplers <- function(MCMCconf) {
+    MCMCconf$removeSamplers("eps.lam")
+    MCMCconf$removeSamplers("eps.p.site")
+    MCMCconf$removeSamplers("eps.p.survey")
+    MCMCconf$removeSamplers("sd.lam")
+    MCMCconf$removeSamplers("sd.p.site")
+    MCMCconf$removeSamplers("sd.p.survey")
+    MCMCconf
+}
+
+.GlobalEnv$removeUnusedSamplers <- removeUnusedSamplers
+
+assignAFSS <- function(MCMCconf) {
+    MCMCconf$removeSamplers(c("beta0","beta"))
+    MCMCconf$addSampler(c("beta0","beta"), type = "AF_slice")
+    MCMCconf$removeSamplers(c("mean.p", "alpha"))
+    MCMCconf$addSampler(c("mean.p", "alpha"), type = "AF_slice")
+    MCMCconf
+}
+
+.GlobalEnv$assignAFSS <- assignAFSS
+
+assignRWB <- function(MCMCconf) {
+    MCMCconf$removeSamplers(c("beta0","beta"))
+    MCMCconf$addSampler(c("beta0","beta"), type = "AF_slice")
+    MCMCconf$removeSamplers(c("mean.p", "alpha"))
+    MCMCconf$addSampler(c("mean.p", "alpha"), type = "AF_slice")
+    MCMCconf
+}
+
+.GlobalEnv$assignRWB <- assignRWB
+```
+
+# MCMC comparison 1: JAGS, NIMBLE default, NIMBLE AFSS, NIMBLE RWB
+
+
+```r
+MCMCdefs = list(
+    nimbleAFSS = quote({
+        assignAFSS(configureMCMC(Rmodel))
+    }),
+    nimbleRWB = quote({
+        assignRWB(configureMCMC(Rmodel))
+    })
+)
+
+nb = 1000
+ni = 10000
+
+inits_values <- SGT_inits_full()
+inits_values <- inits_values[c("N","beta0","mean.p",
+                               "beta","alpha","phi","a")]
+
+SGT_data1_JAGS <- SGT_data1[c("y", "lamDM", "elev", "date", "dur",
+                              "elev2", "date2", "dur2",
+                              "nsite", "nrep")]
+
+ZIP_Nmix_comparisons_JAGS <- compareMCMCs(
+    modelInfo = list(
+        code = Section6p11_code_jags_compatible,
+        data = SGT_data1_JAGS,
+        inits = inits_values
+        ),
+    monitors = params,
+    MCMCdefs = MCMCdefs,
+    MCMCs = c('jags','nimble','nimbleRWB','nimbleAFSS'),
+    summary = TRUE,
+    burnin = nb,
+    niter = ni
+)
+
+make_MCMC_comparison_pages(ZIP_Nmix_comparisons_JAGS,
+                           dir = "ZIP_Nmix_comparison_JAGS",
+                           modelNames = "ZIP_Nmix_SGT")
+
+##browseURL(file.path("ZIP_Nmix_comparison_JAGS",
+##                    "ZIP_Nmix_SGT.html"))
+```
+
+Results are [here](ZIP_Nmix_comparison_JAGS/ZIP_Nmix_SGT.html)
+
+# Comparison 2: NIMBLE default, NIMBLE AFSS, NIMBLE RWB for vectorized version of model.
+
+
+```r
+MCMCdefs = list(
+    default = quote({
+        removeUnusedSamplers(configureMCMC(Rmodel))
+    }),
+    AFSS = quote({
+        assignAFSS(removeUnusedSamplers(configureMCMC(Rmodel)))
+    }),
+    RWB = quote({
+        assignRWB(removeUnusedSamplers(configureMCMC(Rmodel)))
+    })
+)
+
+nb = 1000
+ni = 10000
+
+ZIP_Nmix_comparisons <- compareMCMCs(
+    modelInfo = list(
+        code = Section6p11_code_grouped,
+        data = SGT_data1,
+        inits = SGT_inits_full()
+        ),
+    monitors = params,
+    MCMCdefs = MCMCdefs,
+    MCMCs = c('default','AFSS', 'RWB'),
+    summary = TRUE,
+    burnin = nb,
+    niter = ni
+)
+
+ZIP_Nmix_comparisons_all <- combine_MCMC_comparison_results(ZIP_Nmix_comparisons_JAGS[[1]],
+                                                            ZIP_Nmix_comparisons[[1]])
+
+make_MCMC_comparison_pages(ZIP_Nmix_comparisons_all,
+                           "ZIP_Nmix_comparisons_all",
+                           modelNames = "ZIP_Nmix")
+
+##browseURL(file.path("ZIP_Nmix_comparisons_all","ZIP_Nmix.html"))
+```
+
+Results are [here](ZIP_Nmix_comparisons_all/ZIP_Nmix.html")
+
+# Conclusions:
+
+- NIMBLE's default samplers are faster than JAGS.
+- Block sampling helps a lot in this model.
+- Re-writing the model may help a little, but not nearly as much as using better samplers.

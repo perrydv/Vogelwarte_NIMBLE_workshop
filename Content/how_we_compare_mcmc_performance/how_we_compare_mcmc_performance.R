@@ -8,10 +8,14 @@ cur_dir <- getwd()
 setwd(file.path(nimble_course_dir,
                  'examples_code',
                  'CJS_dipper'))
-source('dipper_model.R')
+source('dipper_basic.R')
 setwd(cur_dir)
 
 ## ---- default-mcmc, eval = TRUE------------------------------------------
+dipper_model <- nimbleModel(dipper_code,
+                            constants = dipper_constants,
+                            data = dipper_data,
+                            inits = dipper_inits)
 defaultMCMCconf <- configureMCMC(dipper_model)
 defaultMCMC <- buildMCMC(defaultMCMCconf)
 ## We can compile both in one step

@@ -19,7 +19,7 @@ cur_dir <- getwd()
 setwd(file.path(nimble_course_dir,
                  'examples_code',
                  'CJS_dipper'))
-source('dipper_model.R')
+source('dipper_basic.R')
 setwd(cur_dir)
 ```
 
@@ -31,7 +31,13 @@ setwd(cur_dir)
 
 # Example: Dipper capture-recapture (CJS) model
 
+The dipper example is introduced [here](../example_CJS_dipper/example_CJS_dipper_slides.html)
+
 ```{r, default-mcmc, eval = TRUE}
+dipper_model <- nimbleModel(dipper_code,
+                            constants = dipper_constants,
+                            data = dipper_data,
+                            inits = dipper_inits)
 defaultMCMCconf <- configureMCMC(dipper_model)
 defaultMCMC <- buildMCMC(defaultMCMCconf)
 ## We can compile both in one step

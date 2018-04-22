@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Example: state-space model with house martin data</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Example: state-space model with house martin data</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div class="slide section level1">
+
+<ul>
+<li>House martin abundance estimates from 1990-2009</li>
+<li>6 additional years of posterior prediction are included</li>
+<li>The model is density-independent.</li>
+<li>There are no covariates.</li>
+<li>Process noise and observation error and both normal on a log scale.</li>
+</ul>
+</div>
+<div id="model-code" class="slide section level1">
+<h1>Model code</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">martin_code</code></pre></div>
+<pre><code>## {
+##     logN.est[1] ~ dnorm(5.6, 0.01)
+##     mean.r ~ dnorm(1, 0.001)
+##     sigma.proc ~ dunif(0, 1)
+##     sigma2.proc &lt;- pow(sigma.proc, 2)
+##     tau.proc &lt;- pow(sigma.proc, -2)
+##     sigma.obs ~ dunif(0, 1)
+##     sigma2.obs &lt;- pow(sigma.obs, 2)
+##     tau.obs &lt;- pow(sigma.obs, -2)
+##     for (t in 1:(T - 1)) {
+##         r[t] ~ dnorm(mean.r, tau.proc)
+##         logN.est[t + 1] &lt;- logN.est[t] + r[t]
+##     }
+##     for (t in 1:T) {
+##         y[t] ~ dnorm(logN.est[t], tau.obs)
+##     }
+##     for (t in 1:T) {
+##         N.est[t] &lt;- exp(logN.est[t])
+##     }
+## }</code></pre>
+</div>
+</body>
+</html>

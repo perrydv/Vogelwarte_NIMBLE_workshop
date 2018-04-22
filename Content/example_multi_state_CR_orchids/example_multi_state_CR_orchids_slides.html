@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Example: multi-state capture-recapture with ladyslipper orchids</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Example: multi-state capture-recapture with ladyslipper orchids</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="orchids-ladyslipper-example" class="slide section level1">
+<h1>Orchids (ladyslipper) example</h1>
+<p>This example is described <a href="../example_multi_state_CR_orchids/example_multi_state_CR_orchids_slides.html">here</a></p>
+<ul>
+<li>From Bayesian Population Analysis Using WinBUGS (Kéry and Schaub)</li>
+<li>Orchids modeled in states &quot;vegetative&quot;, &quot;flowering&quot;, &quot;dormant&quot;, &quot;dead&quot;</li>
+<li>Observations: &quot;seen vegetative&quot;, &quot;seen flowering&quot;, &quot;not seen&quot;.</li>
+<li>k = 11 annual observation periods</li>
+<li>n = 250 unique plants</li>
+<li>n = 236 plants seen before the last observation time</li>
+</ul>
+<p>This is a simple multi-state model because the state when not seen is unknown.</p>
+<p>Obviously multi-state models can be more complicated than this.</p>
+</div>
+<div id="bugs-code" class="slide section level1">
+<h1>BUGS code</h1>
+<p>This code is from BPA:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">orchids_code</code></pre></div>
+<pre><code>## {
+##     for (t in 1:(n_occasions - 1)) {
+##         s[t] ~ dunif(0, 1)
+##     }
+##     for (i in 1:3) {
+##         a[i] ~ dgamma(1, 1)
+##         psiD[i] &lt;- a[i]/sum(a[1:3])
+##         b[i] ~ dgamma(1, 1)
+##         psiV[i] &lt;- b[i]/sum(b[1:3])
+##         c[i] ~ dgamma(1, 1)
+##         psiF[i] &lt;- c[i]/sum(c[1:3])
+##     }
+##     for (i in 1:nind) {
+##         for (t in 1:(n_occasions - 1)) {
+##             ps[1, i, t, 1] &lt;- s[t] * psiV[1]
+##             ps[1, i, t, 2] &lt;- s[t] * psiV[2]
+##             ps[1, i, t, 3] &lt;- s[t] * psiV[3]
+##             ps[1, i, t, 4] &lt;- 1 - s[t]
+##             ps[2, i, t, 1] &lt;- s[t] * psiF[1]
+##             ps[2, i, t, 2] &lt;- s[t] * psiF[2]
+##             ps[2, i, t, 3] &lt;- s[t] * psiF[3]
+##             ps[2, i, t, 4] &lt;- 1 - s[t]
+##             ps[3, i, t, 1] &lt;- s[t] * psiD[1]
+##             ps[3, i, t, 2] &lt;- s[t] * psiD[2]
+##             ps[3, i, t, 3] &lt;- s[t] * psiD[3]
+##             ps[3, i, t, 4] &lt;- 1 - s[t]
+##             ps[4, i, t, 1] &lt;- 0
+##             ps[4, i, t, 2] &lt;- 0
+##             ps[4, i, t, 3] &lt;- 0
+##             ps[4, i, t, 4] &lt;- 1
+##             po[1, i, t, 1] &lt;- 1
+##             po[1, i, t, 2] &lt;- 0
+##             po[1, i, t, 3] &lt;- 0
+##             po[2, i, t, 1] &lt;- 0
+##             po[2, i, t, 2] &lt;- 1
+##             po[2, i, t, 3] &lt;- 0
+##             po[3, i, t, 1] &lt;- 0
+##             po[3, i, t, 2] &lt;- 0
+##             po[3, i, t, 3] &lt;- 1
+##             po[4, i, t, 1] &lt;- 0
+##             po[4, i, t, 2] &lt;- 0
+##             po[4, i, t, 3] &lt;- 1
+##         }
+##     }
+##     for (i in 1:nind) {
+##         z[i, f[i]] &lt;- y[i, f[i]]
+##         for (t in (f[i] + 1):n_occasions) {
+##             z[i, t] ~ dcat(ps[z[i, t - 1], i, t - 1, 1:4])
+##             y[i, t] ~ dcat(po[z[i, t], i, t - 1, 1:3])
+##         }
+##     }
+## }</code></pre>
+<ul>
+<li><code>ps[1, i, t, 2]</code> = probability of transition from state 1 to 2 for individual <code>i</code> at time <code>t</code>.</li>
+<li><code>po[1, i, t, 2]</code> = probability of being observed in state 2 when in state 1 for individual <code>i</code> at time <code>t</code>.</li>
+<li><code>s[t]</code> = survival probability at time <code>t</code>.</li>
+<li><code>psiV[j]</code> = probability of transition from state 1 (Vegetative) to state j.</li>
+<li><code>psiF[j]</code> = probability of transition from state 2 (Flowering) to state j.</li>
+<li><code>psiD[j]</code> = probability of transition from state 3 (Dormant) to state j.</li>
+</ul>
+</div>
+</body>
+</html>

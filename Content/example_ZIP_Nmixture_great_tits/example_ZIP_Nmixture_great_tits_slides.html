@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Example: Zero-inflated Poisson N-mixture model for Swiss Great Tits data</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Example: Zero-inflated Poisson N-mixture model for Swiss Great Tits data</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="example-swiss-great-tits" class="slide section level1">
+<h1>Example: Swiss Great Tits</h1>
+<p>This examples is from Applied Hierarchical Modeling in Ecology, Vol I (Kéry and Royle), Chapter 6, section 6.11.1.</p>
+<h3 id="data-summary">Data summary:</h3>
+<ul>
+<li>267 1-km^2 quadrats in Switzerland</li>
+<li>2-3 surveys per breeding season per quadrat</li>
+<li>Counts follow zero-inflated Poisson: There some probability of a structural zero, and otherwise a Poisson distribution.</li>
+<li>Latent abundance depends on 8 coefficients (intercept + 7 fixed effects)</li>
+<li>Detection probability depends on survey-specific intercept + 13 fixed effects (including some interactions).</li>
+<li>Random effects for site abundance, site detection and survey are not used in this example.</li>
+</ul>
+</div>
+<div id="figures-from-book" class="slide section level1">
+<h1>Figure(s) from book</h1>
+<p>Let's run the original book code and generate its figure(s).</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">cur_dir &lt;-<span class="st"> </span><span class="kw">getwd</span>()
+<span class="kw">setwd</span>(<span class="kw">file.path</span>(nimble_course_dir,
+                 <span class="st">&#39;examples_code&#39;</span>,
+                 <span class="st">&#39;ZIP_Nmixture_SwissGreatTits&#39;</span>))
+.GlobalEnv$DO_PLOT &lt;-<span class="st"> </span><span class="ot">TRUE</span>
+<span class="kw">source</span>(<span class="st">&quot;ZIP_Nmixture_SwissGreatTits.R&quot;</span>)</code></pre></div>
+<pre><code>## Loading required package: unmarked</code></pre>
+<pre><code>## Loading required package: reshape</code></pre>
+<pre><code>## Loading required package: lattice</code></pre>
+<pre><code>## Loading required package: parallel</code></pre>
+<pre><code>## Loading required package: Rcpp</code></pre>
+<pre><code>## Warning: package &#39;Rcpp&#39; was built under R version 3.4.4</code></pre>
+<pre><code>## List of 5
+##  $ species:&#39;data.frame&#39;: 6 obs. of  3 variables:
+##   ..$ specid : int [1:6] 3790 3800 3820 3830 3860 3870
+##   ..$ latname: chr [1:6] &quot;PARMAJ&quot; &quot;PARCAE&quot; &quot;PARATE&quot; &quot;PARCRI&quot; ...
+##   ..$ name   : chr [1:6] &quot;Great tit&quot; &quot;Blue tit&quot; &quot;Coal tit&quot; &quot;Crested tit&quot; ...
+##  $ sites  :&#39;data.frame&#39;: 267 obs. of  9 variables:
+##   ..$ siteID   : chr [1:267] &quot;Q001&quot; &quot;Q002&quot; &quot;Q003&quot; &quot;Q004&quot; ...
+##   ..$ coordx   : int [1:267] 922942 928942 928942 934942 934942 946942 946942 952942 958942 958942 ...
+##   ..$ coordy   : int [1:267] 63276 79276 103276 95276 111276 95276 111276 119276 111276 127276 ...
+##   ..$ AQ       : int [1:267] 1 2 3 3 4 5 6 7 9 10 ...
+##   ..$ AQ.coordx: int [1:267] 920442 930942 930942 930942 930942 950942 950942 950942 960942 960942 ...
+##   ..$ AQ.coordy: int [1:267] 170224 190724 210724 210724 220724 210724 220724 230724 220724 240724 ...
+##   ..$ elev     : int [1:267] 450 450 1050 950 1150 550 750 650 550 550 ...
+##   ..$ rlength  : num [1:267] 6.4 5.5 4.3 4.5 5.4 3.6 3.9 6.1 5.8 4.5 ...
+##   ..$ forest   : int [1:267] 3 21 32 9 35 2 6 60 5 13 ...
+##  $ counts : num [1:267, 1:3, 1:10, 1:6] NA 21 2 NA 4 NA 11 4 NA NA ...
+##   ..- attr(*, &quot;dimnames&quot;)=List of 4
+##   .. ..$ site   : chr [1:267] &quot;Q001&quot; &quot;Q002&quot; &quot;Q003&quot; &quot;Q004&quot; ...
+##   .. ..$ rep    : chr [1:3] &quot;1&quot; &quot;2&quot; &quot;3&quot;
+##   .. ..$ year   : chr [1:10] &quot;2004&quot; &quot;2005&quot; &quot;2006&quot; &quot;2007&quot; ...
+##   .. ..$ species: chr [1:6] &quot;Great tit&quot; &quot;Blue tit&quot; &quot;Coal tit&quot; &quot;Crested tit&quot; ...
+##  $ date   : int [1:267, 1:3, 1:10] 28 23 25 24 22 27 20 21 34 20 ...
+##   ..- attr(*, &quot;dimnames&quot;)=List of 3
+##   .. ..$ site: chr [1:267] &quot;Q001&quot; &quot;Q002&quot; &quot;Q003&quot; &quot;Q004&quot; ...
+##   .. ..$ rep : chr [1:3] &quot;1&quot; &quot;2&quot; &quot;3&quot;
+##   .. ..$ year: chr [1:10] &quot;2004&quot; &quot;2005&quot; &quot;2006&quot; &quot;2007&quot; ...
+##  $ dur    : int [1:267, 1:3, 1:10] 240 175 215 180 180 300 215 200 135 150 ...
+##   ..- attr(*, &quot;dimnames&quot;)=List of 3
+##   .. ..$ site: chr [1:267] &quot;Q001&quot; &quot;Q002&quot; &quot;Q003&quot; &quot;Q004&quot; ...
+##   .. ..$ rep : chr [1:3] &quot;1&quot; &quot;2&quot; &quot;3&quot;
+##   .. ..$ year: chr [1:10] &quot;2004&quot; &quot;2005&quot; &quot;2006&quot; &quot;2007&quot; ...
+##  num [1:263, 1:3] 25 20 4 12 0 4 12 7 10 5 ...
+##  - attr(*, &quot;dimnames&quot;)=List of 2
+##   ..$ site: chr [1:263] &quot;Q001&quot; &quot;Q002&quot; &quot;Q003&quot; &quot;Q004&quot; ...
+##   ..$ rep : chr [1:3] &quot;1&quot; &quot;2&quot; &quot;3&quot;</code></pre>
+<div class="figure">
+<img src="figure/make-figures-1.png" alt="plot of chunk make-figures" />
+<p class="caption">plot of chunk make-figures</p>
+</div>
+<pre><code>## unmarkedFrame Object
+## 
+## 263 sites
+## Maximum number of observations per site: 3 
+## Mean number of observations per site: 2.83 
+## Sites with at least one detection: 191 
+## 
+## Tabulation of y observations:
+##    0    1    2    3    4    5    6    7    8    9   10   11   12   13   14 
+##  215   45   32   33   42   34   37   34   26   24   24   20   24   23   19 
+##   15   16   17   18   19   20   21   22   23   24   25   26   27   28   29 
+##   18   16    8   12    8    4    6    3    5    7    5    2    2    1    1 
+##   30   31   32   33   34   35   38   41 &lt;NA&gt; 
+##    2    2    1    2    1    3    1    1   46 
+## 
+## Site-level covariates:
+##       elev              forest           iLength      
+##  Min.   :-1.46576   Min.   :-1.2571   Min.   :0.1064  
+##  1st Qu.:-0.99774   1st Qu.:-0.9508   1st Qu.:0.1695  
+##  Median :-0.06169   Median :-0.0677   Median :0.1961  
+##  Mean   : 0.00000   Mean   : 0.0000   Mean   :0.2099  
+##  3rd Qu.: 1.03036   3rd Qu.: 0.7793   3rd Qu.:0.2326  
+##  Max.   : 2.43443   Max.   : 2.3112   Max.   :0.8333  
+## 
+## Observation-level covariates:
+##  time         date              dur          
+##  1:263   Min.   :-2.0395   Min.   :-2.67940  
+##  2:263   1st Qu.:-0.7859   1st Qu.:-0.67188  
+##  3:263   Median :-0.2417   Median :-0.01575  
+##          Mean   : 0.0000   Mean   : 0.00000  
+##          3rd Qu.: 0.5073   3rd Qu.: 0.65899  
+##          Max.   : 3.7113   Max.   : 3.23391  
+##          NA&#39;s   :46        NA&#39;s   :46</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">setwd</span>(cur_dir)</code></pre></div>
+</div>
+<div id="original-bugs-code" class="slide section level1">
+<h1>Original BUGS code</h1>
+<p>Here is the original BUGS code, modified slightly for NIMBLE, including separation of posterior predictive quantities inside a definition-time conditional.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">Section6p11_code</code></pre></div>
+<pre><code>## {
+##     phi ~ dunif(0, 1)
+##     theta &lt;- 1 - phi
+##     ltheta &lt;- logit(theta)
+##     beta0 ~ dnorm(0, 0.1)
+##     for (k in 1:7) {
+##         beta[k] ~ dnorm(0, 1)
+##     }
+##     tau.lam &lt;- pow(sd.lam, -2)
+##     sd.lam ~ dunif(0, 2)
+##     for (j in 1:3) {
+##         alpha0[j] &lt;- logit(mean.p[j])
+##         mean.p[j] ~ dunif(0, 1)
+##     }
+##     for (k in 1:13) {
+##         alpha[k] ~ dnorm(0, 1)
+##     }
+##     tau.p.site &lt;- pow(sd.p.site, -2)
+##     sd.p.site ~ dunif(0, 2)
+##     tau.p.survey &lt;- pow(sd.p.survey, -2)
+##     sd.p.survey ~ dunif(0, 2)
+##     for (i in 1:nsite) {
+##         a[i] ~ dbern(phi)
+##         eps.lam[i] ~ dnorm(0, tau.lam)
+##         loglam[i] &lt;- beta0 + inprod(beta[1:7], lamDM[i, 1:7]) + 
+##             eps.lam[i] * hlam.on
+##         loglam.lim[i] &lt;- min(250, max(-250, loglam[i]))
+##         lam[i] &lt;- exp(loglam.lim[i])
+##         mu.poisson[i] &lt;- a[i] * lam[i]
+##         N[i] ~ dpois(mu.poisson[i])
+##     }
+##     for (i in 1:nsite) {
+##         eps.p.site[i] ~ dnorm(0, tau.p.site)
+##         for (j in 1:nrep) {
+##             y[i, j] ~ dbin(p[i, j], N[i])
+##             p[i, j] &lt;- 1/(1 + exp(-lp.lim[i, j]))
+##             lp.lim[i, j] &lt;- min(250, max(-250, lp[i, j]))
+##             lp[i, j] &lt;- alpha0[j] + alpha[1] * elev[i] + alpha[2] * 
+##                 elev2[i] + alpha[3] * date[i, j] + alpha[4] * 
+##                 date2[i, j] + alpha[5] * dur[i, j] + alpha[6] * 
+##                 dur2[i, j] + alpha[7] * elev[i] * date[i, j] + 
+##                 alpha[8] * elev2[i] * date[i, j] + alpha[9] * 
+##                 elev[i] * dur[i, j] + alpha[10] * elev[i] * dur2[i, 
+##                 j] + alpha[11] * elev2[i] * dur[i, j] + alpha[12] * 
+##                 date[i, j] * dur[i, j] + alpha[13] * date[i, 
+##                 j] * dur2[i, j] + eps.p.site[i] * hp.site.on + 
+##                 eps.p.survey[i, j] * hp.survey.on
+##             eps.p.survey[i, j] ~ dnorm(0, tau.p.survey)
+##         }
+##     }
+##     if (DO_POSTERIOR_PREDICTION) {
+##         for (i in 1:nsite) {
+##             for (j in 1:nrep) {
+##                 y.sim[i, j] ~ dbin(p[i, j], N[i])
+##                 e.count[i, j] &lt;- N[i] * p[i, j]
+##                 chi2.actual[i, j] &lt;- pow((y[i, j] - e.count[i, 
+##                   j]), 2)/(e.count[i, j] + e)
+##                 chi2.sim[i, j] &lt;- pow((y.sim[i, j] - e.count[i, 
+##                   j]), 2)/(e.count[i, j] + e)
+##             }
+##         }
+##         fit.actual &lt;- sum(chi2.actual[1:263, 1:3])
+##         fit.sim &lt;- sum(chi2.sim[1:263, 1:3])
+##         bpv &lt;- step(fit.sim - fit.actual)
+##         c.hat &lt;- fit.actual/fit.sim
+##         Ntotal263 &lt;- sum(N[1:263])
+##     }
+## }</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">DO_POSTERIOR_PREDICTION &lt;-<span class="st"> </span><span class="ot">FALSE</span>
+.GlobalEnv$DO_POSTERIOR_PREDICTION &lt;-<span class="st"> </span><span class="ot">FALSE</span></code></pre></div>
+</div>
+</body>
+</html>

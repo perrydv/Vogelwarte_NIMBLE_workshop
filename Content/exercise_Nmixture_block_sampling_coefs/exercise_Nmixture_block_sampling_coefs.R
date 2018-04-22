@@ -7,12 +7,9 @@ if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
 cur_dir <- getwd()
 setwd(file.path(nimble_course_dir,
                  'examples_code',
-                 'Nmixture_with_covariates'))
-source("Nmixture_with_covariates.R")
+                 'extra'))
+source("model1.R")
 setwd(cur_dir)
-
-## ----BUGS-code-----------------------------------------------------------
-Section6p4_code
 
 ## ---- show-samplers------------------------------------------------------
 MCMCconf <- configureMCMC(Nmix_model)

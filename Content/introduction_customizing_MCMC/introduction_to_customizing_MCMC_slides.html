@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Introduction to customizing MCMC in NIMBLE</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Introduction to customizing MCMC in NIMBLE</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="how-does-markov-chain-monte-carlo-work" class="slide section level1">
+<h1>How does Markov chain Monte Carlo work?</h1>
+<p>I assume you have some familiarity with the concepts of sampling from Bayesian posterior distribution. But how does MCMC work?</p>
+<p>MCMC is more like a set of general rules than a single algorithm.</p>
+<p>There are lots of <strong>samplers</strong> that satisfy the rules.</p>
+<p>Statisticians are regularly inventing new samplers and proving that they too satisfy the rules.</p>
+<p>Other packages provide limited flexibility to control the details of how MCMC will be done for a particular model.</p>
+<p>NIMBLE allows control over which samplers wil be used, and it allows you to write new samplers.</p>
+</div>
+<div id="some-terminology-sampler-vs.-kernel." class="slide section level1">
+<h1>Some terminology: sampler vs. kernel.</h1>
+<p>A <strong>sampler</strong> updates the value of one or more nodes in a model.</p>
+<ul>
+<li>Sometimes an &quot;update&quot; results in the same value it started with.</li>
+</ul>
+<p>A <strong>kernel</strong> is a set of samplers that together are valid for sampling from the full posterior.</p>
+<p>(Speaking casually, people might say &quot;sampler&quot; to describe a &quot;kernel&quot;, but we find it useful to maintain the distinction.)</p>
+</div>
+<div id="a-sampler-configuration-in-nimble" class="slide section level1">
+<h1>A sampler configuration in NIMBLE</h1>
+<p>NIMBLE's first step towards creating an MCMC is to create a <strong>configuration</strong>.</p>
+<p>A configuration is simply a list of what kind of sampler will be used for which parts of a model.</p>
+<p>We will use two examples:</p>
+<ul>
+<li>the pump model (<em>for the last time</em>!);</li>
+<li>the Nmixture model with covariates.</li>
+</ul>
+<h2 id="pump-sampler-assignments">Pump sampler assignments</h2>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pumpMCMCconf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(pump)
+pumpMCMCconf$<span class="kw">printSamplers</span>()</code></pre></div>
+<pre><code>## [1]  RW sampler: alpha
+## [2]  conjugate_dgamma_dgamma sampler: beta
+## [3]  conjugate_dgamma_dpois sampler: theta[1]
+## [4]  conjugate_dgamma_dpois sampler: theta[2]
+## [5]  conjugate_dgamma_dpois sampler: theta[3]
+## [6]  conjugate_dgamma_dpois sampler: theta[4]
+## [7]  conjugate_dgamma_dpois sampler: theta[5]
+## [8]  conjugate_dgamma_dpois sampler: theta[6]
+## [9]  conjugate_dgamma_dpois sampler: theta[7]
+## [10] conjugate_dgamma_dpois sampler: theta[8]
+## [11] conjugate_dgamma_dpois sampler: theta[9]
+## [12] conjugate_dgamma_dpois sampler: theta[10]</code></pre>
+<p>We can access the sampler configuration objects to dig deeper</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump_samplers&lt;-<span class="st"> </span>pumpMCMCconf$<span class="kw">getSamplers</span>()
+pump_samplers</code></pre></div>
+<pre><code>## [[1]]
+## RW sampler: alpha
+## [[2]]
+## conjugate_dgamma_dgamma sampler: beta
+## [[3]]
+## conjugate_dgamma_dpois sampler: theta[1]
+## [[4]]
+## conjugate_dgamma_dpois sampler: theta[2]
+## [[5]]
+## conjugate_dgamma_dpois sampler: theta[3]
+## [[6]]
+## conjugate_dgamma_dpois sampler: theta[4]
+## [[7]]
+## conjugate_dgamma_dpois sampler: theta[5]
+## [[8]]
+## conjugate_dgamma_dpois sampler: theta[6]
+## [[9]]
+## conjugate_dgamma_dpois sampler: theta[7]
+## [[10]]
+## conjugate_dgamma_dpois sampler: theta[8]
+## [[11]]
+## conjugate_dgamma_dpois sampler: theta[9]
+## [[12]]
+## conjugate_dgamma_dpois sampler: theta[10]</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## look at the first one
+alpha_sampler &lt;-<span class="st"> </span>pump_samplers[[<span class="dv">1</span>]]
+<span class="kw">class</span>(alpha_sampler)</code></pre></div>
+<pre><code>## [1] &quot;samplerConf&quot;
+## attr(,&quot;package&quot;)
+## [1] &quot;nimble&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">ls</span>(alpha_sampler)</code></pre></div>
+<pre><code>## [1] &quot;control&quot;         &quot;initialize&quot;      &quot;name&quot;            &quot;samplerFunction&quot;
+## [5] &quot;show&quot;            &quot;target&quot;          &quot;targetAsScalar&quot;  &quot;toStr&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">alpha_sampler$target</code></pre></div>
+<pre><code>## [1] &quot;alpha&quot;</code></pre>
+<h2 id="n-mixture-sampler-assignments">N-mixture sampler assignments</h2>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">NmixMCMCconf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(Nmix_model)
+NmixMCMCconf$<span class="kw">printSamplers</span>()</code></pre></div>
+<pre><code>## [1]   RW sampler: alpha0[1]
+## [2]   RW sampler: alpha0[2]
+## [3]   RW sampler: alpha0[3]
+## [4]   RW sampler: alpha1[1]
+## [5]   RW sampler: alpha1[2]
+## [6]   RW sampler: alpha1[3]
+## [7]   RW sampler: beta0[1]
+## [8]   RW sampler: beta0[2]
+## [9]   RW sampler: beta0[3]
+## [10]  RW sampler: beta1[1]
+## [11]  RW sampler: beta1[2]
+## [12]  RW sampler: beta1[3]
+## [13]  slice sampler: N[1]
+## [14]  slice sampler: N[2]
+## [15]  slice sampler: N[3]
+## [16]  slice sampler: N[4]
+## [17]  slice sampler: N[5]
+## [18]  slice sampler: N[6]
+## [19]  slice sampler: N[7]
+## [20]  slice sampler: N[8]
+## [21]  slice sampler: N[9]
+## [22]  slice sampler: N[10]
+## [23]  slice sampler: N[11]
+## [24]  slice sampler: N[12]
+## [25]  slice sampler: N[13]
+## [26]  slice sampler: N[14]
+## [27]  slice sampler: N[15]
+## [28]  slice sampler: N[16]
+## [29]  slice sampler: N[17]
+## [30]  slice sampler: N[18]
+## [31]  slice sampler: N[19]
+## [32]  slice sampler: N[20]
+## [33]  slice sampler: N[21]
+## [34]  slice sampler: N[22]
+## [35]  slice sampler: N[23]
+## [36]  slice sampler: N[24]
+## [37]  slice sampler: N[25]
+## [38]  slice sampler: N[26]
+## [39]  slice sampler: N[27]
+## [40]  slice sampler: N[28]
+## [41]  slice sampler: N[29]
+## [42]  slice sampler: N[30]
+## [43]  slice sampler: N[31]
+## [44]  slice sampler: N[32]
+## [45]  slice sampler: N[33]
+## [46]  slice sampler: N[34]
+## [47]  slice sampler: N[35]
+## [48]  slice sampler: N[36]
+## [49]  slice sampler: N[37]
+## [50]  slice sampler: N[38]
+## [51]  slice sampler: N[39]
+## [52]  slice sampler: N[40]
+## [53]  slice sampler: N[41]
+## [54]  slice sampler: N[42]
+## [55]  slice sampler: N[43]
+## [56]  slice sampler: N[44]
+## [57]  slice sampler: N[45]
+## [58]  slice sampler: N[46]
+## [59]  slice sampler: N[47]
+## [60]  slice sampler: N[48]
+## [61]  slice sampler: N[49]
+## [62]  slice sampler: N[50]
+## [63]  slice sampler: N[51]
+## [64]  slice sampler: N[52]
+## [65]  slice sampler: N[53]
+## [66]  slice sampler: N[54]
+## [67]  slice sampler: N[55]
+## [68]  slice sampler: N[56]
+## [69]  slice sampler: N[57]
+## [70]  slice sampler: N[58]
+## [71]  slice sampler: N[59]
+## [72]  slice sampler: N[60]
+## [73]  slice sampler: N[61]
+## [74]  slice sampler: N[62]
+## [75]  slice sampler: N[63]
+## [76]  slice sampler: N[64]
+## [77]  slice sampler: N[65]
+## [78]  slice sampler: N[66]
+## [79]  slice sampler: N[67]
+## [80]  slice sampler: N[68]
+## [81]  slice sampler: N[69]
+## [82]  slice sampler: N[70]
+## [83]  slice sampler: N[71]
+## [84]  slice sampler: N[72]
+## [85]  slice sampler: N[73]
+## [86]  slice sampler: N[74]
+## [87]  slice sampler: N[75]
+## [88]  slice sampler: N[76]
+## [89]  slice sampler: N[77]
+## [90]  slice sampler: N[78]
+## [91]  slice sampler: N[79]
+## [92]  slice sampler: N[80]
+## [93]  slice sampler: N[81]
+## [94]  slice sampler: N[82]
+## [95]  slice sampler: N[83]
+## [96]  slice sampler: N[84]
+## [97]  slice sampler: N[85]
+## [98]  slice sampler: N[86]
+## [99]  slice sampler: N[87]
+## [100] slice sampler: N[88]
+## [101] slice sampler: N[89]
+## [102] slice sampler: N[90]
+## [103] slice sampler: N[91]
+## [104] slice sampler: N[92]
+## [105] slice sampler: N[93]
+## [106] slice sampler: N[94]
+## [107] slice sampler: N[95]
+## [108] slice sampler: N[96]
+## [109] slice sampler: N[97]
+## [110] slice sampler: N[98]
+## [111] slice sampler: N[99]
+## [112] slice sampler: N[100]</code></pre>
+</div>
+<div id="customizing-a-sampler-configuration" class="slide section level1">
+<h1>Customizing a sampler configuration</h1>
+<p>Let's say you want to remove the random-walk sampler on <code>alpha</code> in the pump model and replace it with a slice sampler.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## First check on samplers for node alpha
+pumpMCMCconf$<span class="kw">printSamplers</span>(<span class="st">&quot;alpha&quot;</span>)</code></pre></div>
+<pre><code>## [1] RW sampler: alpha</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## Remove the old sampler
+pumpMCMCconf$<span class="kw">removeSamplers</span>(<span class="st">&quot;alpha&quot;</span>)
+## Add a new sampler
+pumpMCMCconf$<span class="kw">addSampler</span>(<span class="dt">target =</span> <span class="st">&quot;alpha&quot;</span>, <span class="dt">type =</span> <span class="st">&quot;slice&quot;</span>)
+pumpMCMCconf$<span class="kw">printSamplers</span>()</code></pre></div>
+<pre><code>## [1]  conjugate_dgamma_dgamma sampler: beta
+## [2]  conjugate_dgamma_dpois sampler: theta[1]
+## [3]  conjugate_dgamma_dpois sampler: theta[2]
+## [4]  conjugate_dgamma_dpois sampler: theta[3]
+## [5]  conjugate_dgamma_dpois sampler: theta[4]
+## [6]  conjugate_dgamma_dpois sampler: theta[5]
+## [7]  conjugate_dgamma_dpois sampler: theta[6]
+## [8]  conjugate_dgamma_dpois sampler: theta[7]
+## [9]  conjugate_dgamma_dpois sampler: theta[8]
+## [10] conjugate_dgamma_dpois sampler: theta[9]
+## [11] conjugate_dgamma_dpois sampler: theta[10]
+## [12] slice sampler: alpha</code></pre>
+</div>
+<div id="more-customizing-of-a-sampler-configuration" class="slide section level1">
+<h1>More customizing of a sampler configuration</h1>
+<p>We can also:</p>
+<ul>
+<li>have more than sampler for a node;</li>
+<li>re-order the samplers.</li>
+</ul>
+<p>Sometimes this matters to MCMC efficiency. Let's say we want another sampler on <code>alpha</code> because it needs more mixing attention, and we want them to be separated in the order:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pumpMCMCconf$<span class="kw">addSampler</span>(<span class="dt">target =</span> <span class="st">&quot;alpha&quot;</span>, <span class="dt">type =</span> <span class="st">&quot;slice&quot;</span>)
+pumpMCMCconf$<span class="kw">printSamplers</span>()</code></pre></div>
+<pre><code>## [1]  conjugate_dgamma_dgamma sampler: beta
+## [2]  conjugate_dgamma_dpois sampler: theta[1]
+## [3]  conjugate_dgamma_dpois sampler: theta[2]
+## [4]  conjugate_dgamma_dpois sampler: theta[3]
+## [5]  conjugate_dgamma_dpois sampler: theta[4]
+## [6]  conjugate_dgamma_dpois sampler: theta[5]
+## [7]  conjugate_dgamma_dpois sampler: theta[6]
+## [8]  conjugate_dgamma_dpois sampler: theta[7]
+## [9]  conjugate_dgamma_dpois sampler: theta[8]
+## [10] conjugate_dgamma_dpois sampler: theta[9]
+## [11] conjugate_dgamma_dpois sampler: theta[10]
+## [12] slice sampler: alpha
+## [13] slice sampler: alpha</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pumpMCMCconf$<span class="kw">setSamplers</span>(<span class="kw">c</span>(<span class="dv">1</span>:<span class="dv">6</span>, <span class="dv">12</span>, <span class="dv">7</span>:<span class="dv">11</span>, <span class="dv">13</span>))
+pumpMCMCconf$<span class="kw">printSamplers</span>()</code></pre></div>
+<pre><code>## [1]  conjugate_dgamma_dgamma sampler: beta
+## [2]  conjugate_dgamma_dpois sampler: theta[1]
+## [3]  conjugate_dgamma_dpois sampler: theta[2]
+## [4]  conjugate_dgamma_dpois sampler: theta[3]
+## [5]  conjugate_dgamma_dpois sampler: theta[4]
+## [6]  conjugate_dgamma_dpois sampler: theta[5]
+## [7]  slice sampler: alpha
+## [8]  conjugate_dgamma_dpois sampler: theta[6]
+## [9]  conjugate_dgamma_dpois sampler: theta[7]
+## [10] conjugate_dgamma_dpois sampler: theta[8]
+## [11] conjugate_dgamma_dpois sampler: theta[9]
+## [12] conjugate_dgamma_dpois sampler: theta[10]
+## [13] slice sampler: alpha</code></pre>
+</div>
+<div id="customizing-samplers-programmatically" class="slide section level1">
+<h1>Customizing samplers programmatically</h1>
+<p>Say you want to replace the sampler for every <code>theta</code> node with a random-walk Metropolis-Hastings sampler.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## First let&#39;s start with a fresh default configuration
+pumpMCMCconf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(pump)
+## Next let&#39;s make a function that replaces samplers for
+## any nodes requested.
+assignRW &lt;-<span class="st"> </span>function(MCMCconf, model, nodes) {
+    nodes &lt;-<span class="st"> </span>model$<span class="kw">expandNodeNames</span>(nodes)
+    for(node in nodes) {
+        MCMCconf$<span class="kw">removeSamplers</span>(node)
+        MCMCconf$<span class="kw">addSampler</span>(<span class="dt">target =</span> node, <span class="dt">type =</span> <span class="st">&quot;RW&quot;</span>)
+    }
+    MCMCconf
+}
+## Then let&#39;s use the function for all theta nodes.
+<span class="kw">assignRW</span>(pumpMCMCconf, pump, <span class="st">&#39;theta&#39;</span>)</code></pre></div>
+<pre><code>## MCMC configuration object</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pumpMCMCconf$<span class="kw">printSamplers</span>()</code></pre></div>
+<pre><code>## [1]  RW sampler: alpha
+## [2]  conjugate_dgamma_dgamma sampler: beta
+## [3]  RW sampler: theta[1]
+## [4]  RW sampler: theta[2]
+## [5]  RW sampler: theta[3]
+## [6]  RW sampler: theta[4]
+## [7]  RW sampler: theta[5]
+## [8]  RW sampler: theta[6]
+## [9]  RW sampler: theta[7]
+## [10] RW sampler: theta[8]
+## [11] RW sampler: theta[9]
+## [12] RW sampler: theta[10]</code></pre>
+<p>Note that an MCMC configuration object is a reference class object, so it is passed by reference and modifications happen in-place.</p>
+</div>
+<div id="populating-an-empty-or-partial-mcmc-configuration" class="slide section level1">
+<h1>Populating an empty or partial MCMC configuration</h1>
+<p>Another strategy to take complete control is to make an empty configuration or a partial configuration by providing only those nodes you want configured.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## configure sampler only for node alpha
+pumpMCMCconf_empty &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(pump, <span class="dt">nodes =</span> <span class="st">&#39;alpha&#39;</span>)
+pumpMCMCconf_empty$<span class="kw">printSamplers</span>()</code></pre></div>
+<pre><code>## [1] RW sampler: alpha</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## We could then use addSampler to populate the rest of what we want.</code></pre></div>
+</div>
+<div id="kinds-of-samplers" class="slide section level1">
+<h1>Kinds of samplers</h1>
+<p>The kinds of samplers that bundled with NIMBLE are listed by <code>help(samplers)</code> or in the source code <a href="">here</a>.</p>
+<p>Each sampler has <code>control</code> options we haven't discussed.</p>
+<p>These include:</p>
+<ul>
+<li>Gibbs (aka conjugate).</li>
+<li>binary</li>
+<li>adaptive random-walk Metropolis-Hastings</li>
+<li>block adaptive random-walk Metropolis-Hastings</li>
+<li><code>RW_llFunction</code> A random-walk Metropolis-Hastings that calls any log-likelihood function you provide.</li>
+<li>slice</li>
+<li>elliptical slice sampler</li>
+<li>automated factor slice sampler</li>
+<li>cross-level sampler</li>
+<li>random-walk for particle MCMC</li>
+<li>block random-walk for particle MCMC</li>
+<li>random-walk multinomial sampler</li>
+<li>random-walk Dirichlet sampler</li>
+<li>CAR (conditional autoregression model) normal sampler</li>
+<li>CAR proper sampler</li>
+<li>posterior predictive sampler</li>
+</ul>
+</div>
+</body>
+</html>

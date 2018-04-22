@@ -1,0 +1,55 @@
+---
+title: "Example: multi-state capture-recapture with ladyslipper orchids"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
+    nimble_course_dir <- file.path(getwd(),'..')
+cur_dir <- getwd()
+setwd(file.path(nimble_course_dir,
+                 'examples_code',
+                 'multi_state_CR_orchids'))
+source("orchids_basic.R")
+source("orchids_dDHMM.R")
+setwd(cur_dir)
+
+```
+
+# Orchids (ladyslipper) example
+
+This example is described [here](../example_multi_state_CR_orchids/example_multi_state_CR_orchids_slides.html)
+
+- From Bayesian Population Analysis Using WinBUGS (K&#233;ry and Schaub)
+- Orchids modeled in states "vegetative", "flowering", "dormant", "dead"
+- Observations: "seen vegetative", "seen flowering", "not seen".
+- k = 11 annual observation periods 
+- n = 250 unique plants
+- n = 236 plants seen before the last observation time
+
+This is a simple multi-state model because the state when not seen is unknown.
+
+Obviously multi-state models can be more complicated than this.
+
+# BUGS code 
+
+This code is from BPA:
+
+```{r basic-code}
+orchids_code
+```
+
+- `ps[1, i, t, 2]` = probability of transition from state 1 to 2 for individual `i` at time `t`.
+- `po[1, i, t, 2]` = probability of being observed in state 2 when in state 1 for individual `i` at time `t`.
+- `s[t]` = survival probability at time `t`.
+- `psiV[j]` = probability of transition from state 1 (Vegetative) to state j.
+- `psiF[j]` = probability of transition from state 2 (Flowering) to state j.
+- `psiD[j]` = probability of transition from state 3 (Dormant) to state j.
+

@@ -12,64 +12,7 @@ output:
 
 # Refresher on the Nmixture with covariates example
 
-- Simulated example from AHM Chapter 6.4.
-
-- 3 sampling occasions at each of 100 sites split among 3 habitat types.
-
-- Detection covariate is `Xwind`.  Abundance covariate is `XvegHt`.
-
-- What needs to be sampled in this model?
-
-    - `alpha0[1]` ... `alpha0[3]`, detection intercepts at 3 sampling times
-    - `alpha1[1]` ... `alpha1[3]`, detection slopes at 3 sampling times
-    - `beta0[1]` ... `beta0[3]`, abundance intercepts at 3 sampling times
-    - `beta1[1]` ... `beta1[3]`, abundance slopes at 3 sampling times
-    - `N[1]` ... `N[100]`, latent population size at 100 sites
-
-- There are some posterior predictive nodes.
-
-# Look at the BUGS code
-
-
-```r
-Section6p4_code
-```
-
-```
-## {
-##     for (k in 1:3) {
-##         alpha0[k] ~ dunif(-10, 10)
-##         alpha1[k] ~ dunif(-10, 10)
-##         beta0[k] ~ dunif(-10, 10)
-##         beta1[k] ~ dunif(-10, 10)
-##     }
-##     for (i in 1:M) {
-##         N[i] ~ dpois(lambda[i])
-##         log(lambda[i]) <- beta0[hab[i]] + beta1[hab[i]] * vegHt[i]
-##         critical[i] <- step(2 - N[i])
-##         z[i] <- step(N[i] - 0.5)
-##         for (j in 1:J) {
-##             C[i, j] ~ dbin(p[i, j], N[i])
-##             logit(p[i, j]) <- alpha0[j] + alpha1[j] * wind[i, 
-##                 j]
-##         }
-##     }
-##     Nocc <- sum(z[1:100])
-##     Ntotal <- sum(N[1:100])
-##     Nhab[1] <- sum(N[1:33])
-##     Nhab[2] <- sum(N[34:66])
-##     Nhab[3] <- sum(N[67:100])
-##     for (k in 1:100) {
-##         for (level in 1:3) {
-##             lam.pred[k, level] <- exp(beta0[level] + beta1[level] * 
-##                 XvegHt[k])
-##             logit(p.pred[k, level]) <- alpha0[level] + alpha1[level] * 
-##                 Xwind[k]
-##         }
-##     }
-##     N.critical <- sum(critical[1:100])
-## }
-```
+The Nmixture with covariates example is summarized [here](../example_Nmixture_with_covariates/example_Nmixture_with_covariates_slides.html)
 
 # What are default samplers?
 

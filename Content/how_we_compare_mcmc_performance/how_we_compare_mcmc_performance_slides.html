@@ -70,12 +70,23 @@ Perry de Valpine, UC Berkeley
 </div>
 <div id="example-dipper-capture-recapture-cjs-model" class="slide section level1">
 <h1>Example: Dipper capture-recapture (CJS) model</h1>
+<p>The dipper example is introduced <a href="../example_CJS_dipper/example_CJS_dipper_slides.html">here</a></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">dipper_model &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(dipper_code,
+                            <span class="dt">constants =</span> dipper_constants,
+                            <span class="dt">data =</span> dipper_data,
+                            <span class="dt">inits =</span> dipper_inits)</code></pre></div>
+<pre><code>## defining model...</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## setting data and initial values...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">defaultMCMCconf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(dipper_model)
 defaultMCMC &lt;-<span class="st"> </span><span class="kw">buildMCMC</span>(defaultMCMCconf)
 ## We can compile both in one step
 dipper_compiled &lt;-<span class="st"> </span><span class="kw">compileNimble</span>(dipper_model, defaultMCMC)</code></pre></div>
-<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.</code></pre>
-<pre><code>## compilation finished.</code></pre>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CdefaultMCMC &lt;-<span class="st"> </span>dipper_compiled$defaultMCMC
 ## Illustration of running MCMC &quot;directly&quot;
 CdefaultMCMC$<span class="kw">run</span>(<span class="dv">5000</span>)</code></pre></div>
@@ -124,7 +135,7 @@ Preparing plots for phi.  100% complete.</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(coda)
 <span class="kw">effectiveSize</span>(defaultSamples)</code></pre></div>
 <pre><code>##        p      phi 
-## 274.5079 630.4315</code></pre>
+## 326.5846 711.7418</code></pre>
 <p>We can see that the effective sample size is considerably smaller than the number of samples (4000, in this case).</p>
 </div>
 <div id="measuring-mcmc-performance-mcmc-efficiency" class="slide section level1">
@@ -149,6 +160,14 @@ Preparing plots for phi.  100% complete.</code></pre>
 <li>Often there are many fast-mixing parameters and one or a few slow-mixing ones.</li>
 <li>We need all parameters to be mixed well to rely on results.</li>
 <li>Therefore our single measure of efficiency is:</li>
+</ul>
+</div>
+<div id="why-we-dont-care-as-much-about-mean-mcmc-efficiency" class="slide section level1">
+<h1>Why we don't care as much about mean MCMC efficiency</h1>
+<ul>
+<li>It is tempting to think mean (across parameters) of MCMC efficiency is a good measure of overall performance.</li>
+<li>If you rely on mean efficiency, you could end up like the statistician who drowned in a river with an average depth of three feet.</li>
+<li>If some parameters are mixing very well and others very poorly, you should not feel the results are acceptable.</li>
 </ul>
 <p><strong>Net MCMC efficiency = Minimum MCMC efficiency over all parameters</strong></p>
 </div>

@@ -16,6 +16,12 @@ This model is highly conjugate.  Such rare models are where JAGS is at its best.
 
 This model is easily sampled, so it is not in great need of improvement, but examples with it run quickly.
 
+Agenda:
+
+1. Introduction
+2. Study the model and re-write it.
+3. Set up a variety of sampler configurations and see what works.
+
 # Terminology
 
 - "target" node(s) = node(s) to be sampled (or "updated") by a particular MCMC sampler.
@@ -125,8 +131,9 @@ Even worse, the computational burden of sampling this state-space model as writt
 #### Another way to write this model
 
 We can re-write the model so that the latent population size at each
-is stochastic, rather than the environmental noise at each time.  The
-modes are statistically equivalent.
+time is stochastic, rather than having a separate stochastic
+environmental noise at each time.  The two ways to write the model are statistically
+equivalent.
 
 
 ```r
@@ -205,6 +212,8 @@ martin_model_alt$getDependencies('logN.est[20]')
 ## [4] "N.est[20]"                                         
 ## [5] "logN.est[21]"
 ```
+
+The computational cost of the dependency structure is not the only consideration here.  Changing the parameterization can also change the posterior correlations among latent states, which can affect mixing.  But in this case decreasing the computational cost turns out to be a good move.
 
 #### Compare MCMCs
 
@@ -343,6 +352,78 @@ The results are [here](martin_MCMC_comparison/MCMCresults.html)
 It does look like the alternative version yields faster MCMC for both
 NIMBLE and JAGS.
 
+# Strategies for customizing MCMC configurations
+
+- Below we will set up functions to create a variety of custom MCMC configurations.
+
+- Then we will run a big comparison of all ideas.
+
+# Identify worst-mixing parameters and focus on them
+
+We see from the `compareMCMCs` figures that `sigma.obs` and `sigma.proc` are the worst-mixing parameters.  It is not uncommon for a random effects standard deviation to mix slowly.
+
+# Sample some nodes on a log scale
+
+## **Replace**  samplers with RW-MH on a log scale ##
+
+
+```r
+assignRWlogScale <- function(MCMCconf, nodes) {
+    for(node in nodes) {
+        MCMCconf$removeSamplers(node)
+        MCMCconf$addSampler(target = node,
+                            type = 'RW',
+                            control = list(log = TRUE))
+    }
+    MCMCconf
+}
+## Following is needed only when generating html
+.GlobalEnv$assignRWlogScale <- assignRWlogScale
+```
+
+# Sample some nodes more often
+
+## Add **extra**  RW-MH samplers on a log scale ##
+
+```r
+addRWlogScale <- function(MCMCconf, nodes) {
+    numSamplers <- length(MCMCconf$getSamplers())
+    iHalf <- ceiling(numSamplers/2)
+    for(node in nodes) {
+        MCMCconf$addSampler(target = node,
+                            type = 'RW',
+                            control = list(log = TRUE))
+    }
+    ## re-order samplers so the new ones are in the middle of the list
+    MCMCconf$setSamplers(c(1:iHalf, ## first half of original list
+    (numSamplers+1):(numSamplers+length(nodes)), ## new samplers from end of list
+    (iHalf+1):numSamplers)) ## second half of original list
+    MCMCconf
+}
+.GlobalEnv$addRWlogScale <- addRWlogScale
+```
+
+# Try some different samplers
+
+ Latent states are sampled with conjugate (Gibbs) samplers.  This is
+ effective but more costly than RW-MH sampling.  Let's try using
+ RW-MH.
+
+
+```r
+assignRW <- function(MCMCconf, model, nodes) {
+    nodes <- model$expandNodeNames(nodes)
+    for(node in nodes) {
+        MCMCconf$removeSamplers(node)
+        MCMCconf$addSampler(target = node,
+                            type = 'RW')
+    }
+    MCMCconf
+}
+## Following is needed only when generating html
+.GlobalEnv$assignRW <- assignRW
+```
+
 # Manual blocking
 
 NIMBLE comes with two kinds of block samplers:
@@ -354,46 +435,99 @@ NIMBLE comes with two kinds of block samplers:
 corrdinates.  This is more computationally intense but will ensure
 that moves are made.
 
-Let's try sampling `sigma.obs` and `sigma.proc` using AFSS:
+Let's try blocking groups of three latent states using block RW-MH or AFSS:
 
 
 ```r
-configureAFSSsigmas <- function(Rmodel) {
-    MCMCconf <- configureMCMC(Rmodel)
-    MCMCconf$removeSamplers('sigma.proc')
-    MCMCconf$removeSamplers('sigma.obs')
-    MCMCconf$addSampler(target = c('sigma.proc','sigma.obs'),
-                        type = 'AF_slice')
+blockStates <- function(MCMCconf, Rmodel, states, type) {
+    stateNodes <- Rmodel$expandNodeNames(states)
+    numStates <- length(stateNodes)
+    numBlocks <- ceiling(numStates/3)
+    for(i in 1:numBlocks) {
+        iStart <- (3*(i-1)+1)       ## 1, 4, 7, 10 etc.
+        iEnd <- min(3*i, numStates) ## 3, 6, 9, 12 etc. or max
+        blockNodes <- stateNodes[iStart:iEnd]
+        MCMCconf$removeSamplers(blockNodes)
+        ## check if there is a singleton at the end
+        if(iEnd > iStart) {
+            MCMCconf$addSampler(blockNodes, type = type, silent = TRUE)
+        } else {
+            MCMCconf$addSampler(blockNodes, type = 'RW') ## in case there is a singleton
+        }
+    }
     MCMCconf
 }
 
-configureRWBsigmas <- function(Rmodel) {
-    MCMCconf <- configureMCMC(Rmodel)
-    MCMCconf$removeSamplers('sigma.proc')
-    MCMCconf$removeSamplers('sigma.obs')
-    MCMCconf$addSampler(target = c('sigma.proc','sigma.obs'),
-                        type = 'RW_block')
-    MCMCconf
-}
+.GlobalEnv$blockStates <- blockStates
+```
 
-## Next two lines are needed only when generating html
-.GlobalEnv$configureAFSSsigmas <- configureAFSSsigmas
-.GlobalEnv$configureRWBsigmas <- configureRWBsigmas
+# Automatic blocking
 
-mcmcResultBlockSigmas <- compareMCMCs(
-    list(original = list(code = martin_code_alt, inits = ourInits, data = bugs.data)),
+* NIMBLE includes an algorithm (Turek et al. 2016) that automatically
+searches for good blocking combinations.
+
+* This takes additional time, but it is worth it if you can re-use
+what you learn.
+
+* It is available as an option to `configureMCMC` or `compareMCMCs`.
+
+For this model, autoBlock did not help, so we'll illustrate it later.
+
+# Write new samplers
+
+We will learn how to do this later.
+
+# Defer posterior predictive computations until after MCMC
+
+In this model, years 2010-2015 (`y[21]` - `y[26]`) are
+posterior-predictive.  They do not need to be sampled during parameter
+estimation, although BUGS/JAGS users are accustomed to doing so.
+
+We will show later how posterior predictive sampling can be done
+separately from MCMC.
+
+# Putting it all together: The race is on
+
+
+```r
+MCMCdefs = list(
+    RWsigmaLogScale = quote({assignRWlogScale(configureMCMC(Rmodel),
+                                         c('sigma.proc','sigma.obs'))}),
+    RWsigmaLogScale2 = quote({addRWlogScale(assignRWlogScale(configureMCMC(Rmodel),
+                                                        c('sigma.proc','sigma.obs')),
+                                       c('sigma.proc','sigma.obs'))}),
+    RWstates = quote({assignRW(configureMCMC(Rmodel),
+                               Rmodel,
+                               'logN.est')}),
+    RWstates_RWsigmaLogScale = quote({assignRW(assignRWlogScale(configureMCMC(Rmodel),
+                                                                c('sigma.proc','sigma.obs')),
+                                               Rmodel,
+                                               'logN.est')}),
+    RWblockStates = quote({blockStates(configureMCMC(Rmodel),
+                                       Rmodel,
+                                       'logN.est',
+                                       'RW_block')}),
+    RWblockStates_RWsigmaLogScale = quote({blockStates(
+                                               assignRWlogScale(configureMCMC(Rmodel),
+                                                                c('sigma.proc','sigma.obs')),
+                                               Rmodel,
+                                               'logN.est',
+                                               'RW_block')})
+)
+
+house_martin_comparisons <- compareMCMCs(
+    list(house_martin = list(code = martin_code_alt,
+                             inits = ourInits,
+                             data = bugs.data)),
     niter = 50000,
     burnin = 5000,
-    MCMCdefs = list(
-        AFSSsigmas = quote({configureAFSSsigmas(Rmodel)}),
-        RWBsigmas = quote({configureRWBsigmas(Rmodel)})
-    ),
-    MCMCs = c('AFSSsigmas', 'RWBsigmas'),
+    MCMCdefs = MCMCdefs,
+    MCMCs = c('nimble', 'jags', names(MCMCdefs)),
     summary = TRUE)
 ```
 
 ```
-## Working on original
+## Working on house_martin
 ```
 
 ```
@@ -420,7 +554,21 @@ mcmcResultBlockSigmas <- compareMCMCs(
 ## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
 ## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
 ## model building finished.
-## Note: Assigning an RW_block sampler to nodes with very different scales can result in low MCMC efficiency.  If all nodes assigned to RW_block are not on a similar scale, we recommend providing an informed value for the "propCov" control list argument, or using the AFSS sampler instead.
+```
+
+```
+## Compiling model graph
+##    Resolving undeclared variables
+##    Allocating nodes
+## Graph information:
+##    Observed stochastic nodes: 20
+##    Unobserved stochastic nodes: 35
+##    Total graph size: 128
+## 
+## Initializing model
+```
+
+```
 ## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
 ## compilation finished.
 ## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
@@ -432,32 +580,30 @@ mcmcResultBlockSigmas <- compareMCMCs(
 ## |-------------------------------------------------------|
 ## |-------------|-------------|-------------|-------------|
 ## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
 ```
 
-# Automatic blocking
+```r
+make_MCMC_comparison_pages(house_martin_comparisons,
+                           dir = "martin_MCMC_comparison_many",
+                           modelNames = "house_martin")
+```
 
-* NIMBLE includes an algorithm (Turek et al. 2016) that automatically
-searches for good blocking combinations.
+The results are [here](martin_MCMC_comparison_many/house_martin.html).
 
-* This takes additional time, but it is worth it if you can re-use
-what you learn.
+These methods are not very different.  In more complicated models, we
+can see much bigger performance differences between methods.  We can
+conclude that blocking groups of latent states did not help, while
+sampling standard deviations on a log scale did help.
 
-* It is available as an option to `configureMCMC` or `compareMCMCs`.
-
-For this model, autoBlock did not help, so we'll illustrate it later.
-
-# Sample some nodes on a log scale (especially sigmas)
-
-# Sample some nodes more often
-
-# Try different kinds of samplers
-
-In this model, it may be worth trying RW samplers instead of conjugate
-(Gibbs) samplers.
-
-# Write new samplers
-
-# Defer posterior predictive computations until after MCMC
-
-In this model, years 2010-2015 (`y[21]` - `y[26]`) are posterior-predictive.
-
+Again, this was a simple example to illustrate the process of
+comparing MCMC methods.

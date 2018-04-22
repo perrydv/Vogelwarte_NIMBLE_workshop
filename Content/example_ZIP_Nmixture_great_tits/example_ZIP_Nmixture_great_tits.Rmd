@@ -1,0 +1,53 @@
+---
+title: "Example: Zero-inflated Poisson N-mixture model for Swiss Great Tits data"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
+    nimble_course_dir <- file.path(getwd(),'..')
+```
+
+# Example: Swiss Great Tits
+
+This examples is from Applied Hierarchical Modeling in Ecology, Vol I (K&#233;ry and Royle), Chapter 6, section 6.11.1.
+
+### Data summary:
+
+- 267 1-km^2 quadrats in Switzerland
+- 2-3 surveys per breeding season per quadrat
+- Counts follow zero-inflated Poisson: There some probability of a structural zero, and otherwise a Poisson distribution.
+- Latent abundance depends on 8 coefficients (intercept + 7 fixed effects)
+- Detection probability depends on survey-specific intercept + 13 fixed effects (including some interactions).
+- Random effects for site abundance, site detection and survey are not used in this example.
+
+# Figure(s) from book
+
+Let's run the original book code and generate its figure(s).
+
+```{r make-figures}
+cur_dir <- getwd()
+setwd(file.path(nimble_course_dir,
+                 'examples_code',
+                 'ZIP_Nmixture_SwissGreatTits'))
+.GlobalEnv$DO_PLOT <- TRUE
+source("ZIP_Nmixture_SwissGreatTits.R")
+setwd(cur_dir)
+```
+
+# Original BUGS code
+
+Here is the original BUGS code, modified slightly for NIMBLE, including separation of posterior predictive quantities inside a definition-time conditional.
+
+```{r original-code}
+Section6p11_code
+DO_POSTERIOR_PREDICTION <- FALSE
+.GlobalEnv$DO_POSTERIOR_PREDICTION <- FALSE
+```

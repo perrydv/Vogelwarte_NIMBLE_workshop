@@ -1,0 +1,62 @@
+model
+{
+    phi ~ dunif(0, 1)
+    theta <- 1 - phi
+    ltheta <- logit(theta)
+    beta0 ~ dnorm(0, 0.1)
+    for (k in 1:7) {
+        beta[k] ~ dnorm(0, 1)
+    }
+    tau.lam <- pow(sd.lam, -2)
+    sd.lam ~ dunif(0, 2)
+    for (j in 1:3) {
+        alpha0[j] <- logit(mean.p[j])
+        mean.p[j] ~ dunif(0, 1)
+    }
+    for (k in 1:13) {
+        alpha[k] ~ dnorm(0, 1)
+    }
+    tau.p.site <- pow(sd.p.site, -2)
+    sd.p.site ~ dunif(0, 2)
+    tau.p.survey <- pow(sd.p.survey, -2)
+    sd.p.survey ~ dunif(0, 2)
+    loglam.fixed[1:nsite] <- beta0 + (lamDM[1:nsite, 1:7] %*% beta[1:7])[1:nsite, 1]
+    for (i in 1:nsite) {
+        a[i] ~ dbern(phi)
+        eps.lam[i] ~ dnorm(0, tau.lam)
+        loglam[i] <- loglam.fixed[i] + eps.lam[i] * hlam.on
+        loglam.lim[i] <- min(250, max(-250, loglam[i]))
+        lam[i] <- exp(loglam.lim[i])
+        mu.poisson[i] <- a[i] * lam[i]
+        N[i] ~ dpois(mu.poisson[i])
+    }
+    for (j in 1:nrep) {
+        lp.fixed[1:nsite, j] <- alpha0[j] + alpha[1] * elev[1:nsite] + alpha[2] * elev2[1:nsite] + alpha[3] * date[1:nsite, j] + alpha[4] * date2[1:nsite, j] + alpha[5] * dur[1:nsite, j] + alpha[6] * dur2[1:nsite, j] + alpha[7] * elev[1:nsite] * date[1:nsite, j] + alpha[8] * elev2[1:nsite] * date[1:nsite, j] + alpha[9] * elev[1:nsite] * dur[1:nsite, j] + alpha[10] * elev[1:nsite] * dur2[1:nsite, j] + alpha[11] * elev2[1:nsite] * dur[1:nsite, j] + alpha[12] * date[1:nsite, j] * dur[1:nsite, j] + alpha[13] * 
+            date[1:nsite, j] * dur2[1:nsite, j]
+    }
+    for (i in 1:nsite) {
+        eps.p.site[i] ~ dnorm(0, tau.p.site)
+        for (j in 1:nrep) {
+            y[i, j] ~ dbin(p[i, j], N[i])
+            p[i, j] <- 1/(1 + exp(-lp.lim[i, j]))
+            lp.lim[i, j] <- min(250, max(-250, lp[i, j]))
+            lp[i, j] <- lp.fixed[i, j] + eps.p.site[i] * hp.site.on + eps.p.survey[i, j] * hp.survey.on
+            eps.p.survey[i, j] ~ dnorm(0, tau.p.survey)
+        }
+    }
+    if (DO_POSTERIOR_PREDICTION) {
+        for (i in 1:nsite) {
+            for (j in 1:nrep) {
+                y.sim[i, j] ~ dbin(p[i, j], N[i])
+                e.count[i, j] <- N[i] * p[i, j]
+                chi2.actual[i, j] <- pow((y[i, j] - e.count[i, j]), 2)/(e.count[i, j] + e)
+                chi2.sim[i, j] <- pow((y.sim[i, j] - e.count[i, j]), 2)/(e.count[i, j] + e)
+            }
+        }
+        fit.actual <- sum(chi2.actual[1:263, 1:3])
+        fit.sim <- sum(chi2.sim[1:263, 1:3])
+        bpv <- step(fit.sim - fit.actual)
+        c.hat <- fit.actual/fit.sim
+        Ntotal263 <- sum(N[1:263])
+    }
+}

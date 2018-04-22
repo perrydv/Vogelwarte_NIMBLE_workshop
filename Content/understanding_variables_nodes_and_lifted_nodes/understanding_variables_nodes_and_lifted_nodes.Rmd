@@ -1,0 +1,403 @@
+---
+title: "Understanding variables, nodes, lifted nodes, and graphs"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+library(igraph)
+if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
+    nimble_course_dir <- file.path(getwd(),'..')
+source(file.path(nimble_course_dir,
+                 'examples_code',
+                 'pump',
+                 'pump_model.R'))
+source(file.path(nimble_course_dir,
+                 'general_code',
+                 'drawGraph.R'))
+```
+
+# Outline
+
+In this module, we'll learn some terms and concepts for models in NIMBLE:
+
+- the distinction between a *variable* and a *node*;
+- how to find variables and nodes in a model;
+- some different types of nodes;
+- what *lifted nodes* are;
+- an introduction to *model-generic programming*.
+
+We will continue to use the pump model to illustrate concepts because it is so simple.
+
+# Pump model
+
+```{r pump-model}
+pumpCode
+```
+
+# Variables and Nodes
+
+- A **variable** is an object that contains one or more nodes.
+- A **node** is an object declared in a model statement.
+- Every node is *stochastic* (declared with `~`) or * deterministic (declared with `<-`).
+
+Example:
+
+- `lambda` is a variable in the pump model.
+- `lambda[3]` is a node in the pump model.
+
+A node can be scalar or multivariate.
+
+One of the main features of the BUGS language is that a variable can contain a variety of different kinds of nodes.
+
+Example:
+
+- We could have a variable `X` that is 10 $\times$ 10.
+- `X[1:10, 1]` could be a stochastic node following a Dirichlet distribution.
+- Each `X[1, 2:5]`...`X[10, 2:5]` could be a vector deterministic node from some calculation.
+- Each `X[1,6]`...`X[9, 10]` could be a scalar stochastic node following a gamma distribution.
+- `X[10, 6:10]` could be a stochastic node following a multivariate normal.
+
+# Accessing values of variables and nodes
+
+### Accessing variables
+
+```{r use-variable}
+pump$lambda ## accesses the variable lambda
+pump$lambda[3:5] ## accesses elements of lambda
+## which may or may not be one node or multiple nodes.
+```
+
+### Accessing nodes
+```{r use-node}
+pump[['lambda[3]']] ## accesses node lambda[3]
+```
+
+You can also assign values (`<-`) to variables and nodes.
+
+Example: If you didn't provide a good choice of initial values when you created the model (via `inits` argument to `nimbleModel`), you are free to assign values to the model via its variables or nodes.
+
+# Why does accessing nodes seem strange in R?
+
+- `pump$lambda[3]` feels "natural" in R.
+- `pump[['lambda[3]']]` feels "strange" in R.
+
+    - Why?  The index is in a character string!
+    - `pump[['lambda[i]']]` **does not work**. `i` will not be evaluated
+    - `pump$lambda[i]` will of course work.
+
+The reason for the node name system is model-generic programming.
+
+- Sometimes a node will be `X[2, 3]` or `beta[4, 6, 1]`.
+- These are all scalar nodes.
+- We need a way to use nodes that does not depend on how many indices they have. Hence we use node names.
+- We will see this more concretely later.
+
+# Learning about the variable and nodes in your model.
+
+We can see all the node names like this:
+```{r see-nodes}
+pump$getNodeNames()
+```
+
+We can see just the node names from one variable or part of a variable like this:
+```{r expand-nodes}
+pump$expandNodeNames('lambda')
+pump$expandNodeNames('lambda[2:5]')
+```
+
+We can see variable names like this:
+```{r see-variables}
+pump$getVarNames()
+```
+
+We can get information about a variable like this:
+```{r see-varInfo}
+pump$getVarInfo('lambda')
+pump$getVarInfo('theta')
+```
+
+# logProb variables
+
+Every stochastic node automatically has an element of a "logProb" variable associated
+with it. The log probability (density) of the variable will be stored in this element when it is *calculated*.
+
+logProb variables are simply named as `logProb_[variable name]`.
+
+We sometimes call these "logProb nodes" out of habit, but they are not
+nodes in the graph.
+
+Example:
+```{r see-logProb}
+pump$logProb_theta ## These were all initialized with the same value
+pump$logProb_x
+```
+
+You don't generally need to use logProb variables directly.  Once we start
+programming, you will instead use
+```{r getLogProb}
+pump$getLogProb('x[3]')
+```
+However it is useful to understand the existence of the logProb variables.
+
+
+# Finding logProb variables
+
+### Scalar nodes
+For scalar stochastic nodes, the logProb node is usually obvious.
+
+For `theta[3]`, the log probability value will be in
+`logProb_theta[3]`.
+
+### Multivariate nodes
+For multivariate stochastic nodes, it is not as obvious.
+
+If `X[3:5,  2]` follows a multivariate normal, its log probability
+value will be in `logProb_X[3, 2]`.
+
+You can find logProb variables like this:
+```{r see-logProb-vars}
+pump$getVarNames(includeLogProb = TRUE)
+```
+
+# Topological ordering of nodes and why it matters
+
+Suppose we want to change the value of `theta[3]` and update all relevant
+parts of the graph.
+
+(The meaning of "relevant" depends on our purpose of changing `theta[3]`.
+In this case imagine we are making a Metropolis-Hastings (MCMC)
+proposal and need to calculate its acceptance probability.)
+
+The nodes that need to be updated are shown in red.
+
+
+```{r, deps-graph, fig.cap=""}
+## function drawGraph is defined in the R file for this module
+drawGraph(pump, colorBy = pump$getDependencies('theta[3]'))
+```
+
+Note that **order matters**.  If we calculated the log probability
+density of `x[3]` *before* calculating `lambda[3]`, then `x[3]` would
+use the *old* value of `lambda[3]`.  That would be a mistake.
+
+A valid order for calculations is called **topologically sorted**.  Most
+of NIMBLE's model-querying functions will return nodes in tologically sorted order.
+
+# Types of nodes.
+
+Some definitions:
+
+- LHS = "left-hand-side" of a BUGS declaration
+- RHS = "right-hand-side" of a BUGS declaration
+
+Every node falls into one of following categories **based on
+how it appears in BUGS code**:
+
+- deterministic: declared on LHS  with `<-`
+- stochastic: declared on LHS with `~`
+- RHSonly: appears only on RHS of one or more declarations, never on
+the LHS.
+
+Every node *also* falls into one of the following categories **based on where
+it is in the graph**:
+
+- top: Has no stochastic nodes "above" it in the graph.
+- latent: Has stochastic nodes "above" and "below" it in the graph.
+- end: Has no stochastic nodes "below" it in the graph.
+
+Sometimes people use ancestray terms:
+
+- "above" = "parent" or "ancestor"
+- "below" = "child" or "descendent"
+
+Once a model is created, stochastic nodes can be labeled as **data**.
+
+- Multiple copies of the same model can be created from the same BUGS code, with
+possibly different data nodes.
+- The data label is used by programs to decide what to do.
+- Values of data nodes can be changed.
+- Data labels should not be changed after an algorithm like MCMC
+  has been built for a model.
+
+# Finding out about nodes
+
+## Stochastic, deterministic, and/or data
+Here is a graph color-coded by whether nodes are stochastic,
+deterministic, and/or labeled as data:
+
+```{r stoch-determ-data-fig, fig.cap = ""}
+drawGraph(pump, colorBy = "stochDetermData")
+```
+
+You can select groups of nodes by these types:
+
+```{r}
+## deterministic nodes
+pump$getNodeNames(determOnly = TRUE)
+## all stochastic nodes
+pump$getNodeNames(stochOnly = TRUE, includeData = TRUE)
+## non-data stochastic nodes
+pump$getNodeNames(stochOnly = TRUE, includeData = FALSE)
+```
+
+## top, latend, and end
+
+Here is a graph color-coded by whether nodes are top, latent, or end
+nodes.
+```{r top-latent-end-fig, fig.cap=""}
+drawGraph(pump, 'topLatentEnd')
+```
+
+You can also select groups of nodes by these types:
+
+```{r}
+pump$getNodeNames(topOnly = TRUE)   #salmon
+pump$getNodeNames(latentOnly = TRUE)  #cyan
+pump$getNodeNames(endOnly = TRUE)    #plum
+```
+
+## Combined categories
+
+Say you want to know what the stochastic, latent nodes are.
+
+```{r stoch-latent-nodes}
+pump$getNodeNames(stochOnly = TRUE, latentOnly = TRUE)
+```
+
+## RHSonly nodes
+
+You also can query the model for RHSonly nodes:
+```{r RHSonly}
+pump$getNodeNames(includeRHSonly = TRUE)
+```
+
+In this case, there are no RHSonly nodes.  We might think `t` nodes
+are RHSonly, but in fact since `t` was provided in `constants`, it is
+no longer considered to be a variable in the model.  Its values have been **permanently** substituted where needed.
+
+We could modify how we create the model as follows to see `t` nodes appear as
+RHSonly.
+
+```{r see-RHSonly}
+## Move "t" from constants to data
+pumpData2 <- c(pumpData, pumpConsts['t'])
+pumpConsts2 <- pumpConsts['N']
+pump2 <- nimbleModel(
+    pumpCode,
+    data = pumpData2,
+    constants = pumpConsts2
+)
+pump2$getNodeNames()
+pump2$getNodeNames(includeRHSonly = TRUE)
+```
+
+Now we see that `t` nodes have appeared when we ask to include `RHSonly` nodes.
+
+# Topologically sorting nodes
+
+If for some reason you have a collection of node names and need them
+topologically sorted:
+
+```{r}
+pump$topologicallySortNodes(c('x[1:3]','beta','theta[1:3]'))
+```
+
+Often there is more than one valid topological sorting, but NIMBLE
+chooses one that is usually intuitive and uses it for your model.
+
+# Inspecting the model: Querying graph dependencies
+
+There are several kinds of dependencies that may be needed in different circumstances.
+
+- *Stochastic dependencies* (called the *Markov blanket* in
+     computer science) terminate at stochastic nodes
+     (inclusive). These are the dependencies needed for many kinds of MCMC samplers.
+
+```{r}
+pump$getDependencies('theta[3]')
+```
+
+- *Deterministic dependencies* terminate at stochastic nodes but
+omit the stochastic nodes. These can be useful for implementing a particle filter.
+```{r}
+pump$getDependencies('theta[3]', determOnly = TRUE)
+```
+
+```{r, echo=FALSE, fig.cap=""}
+drawGraph(pump, pump$getDependencies('theta[3]', determOnly = TRUE))
+```
+
+- Other ways to control the dependency query can be found by
+```{r}
+args(pump$getDependencies)
+## or help(modelBaseClass)
+```
+
+
+# The importance of querying a model: lifted nodes
+
+**You should never assume you know what nodes are in a model simply
+because you wrote the BUGS code.**
+
+NIMBLE implements some features by inserting its own nodes.  These are
+called **lifted nodes**.
+
+Let's look at the two main ways this happens:
+
+```{r, fig.cap=""}
+m1 <- nimbleModel(
+    nimbleCode({
+        tau ~ dunif(0, 100)
+        x ~ dnorm(0, tau) #by default, tau is a precision
+    }))
+plot(m1$getGraph())
+m1$getNodeNames()
+```
+The node `lifted_d1_over_sqrt_oPtau_cP` has been inserted between
+`tau` and `x`.   The resulting model would equivalently have been
+created by this BUGS code:
+
+```{r, eval = FALSE}
+nimbleCode({
+    tau ~ dunif(0, 100)
+    lifted_d1_over_sqrt_oPtau_cP <- 1/sqrt(tau)
+    x ~ dnorm(0, sd = lifted_d1_over_sqrt_oPtau_cP) #by default, tau is a precision
+}))
+```
+
+NIMBLE has *lifted* the calculation of standard deviation from
+precision so that it is part of the model's graph.  Therefore *you
+will make a mistake if you assume that the dependencies of `tau`
+include only `x`*:
+
+```{r, eval = FALSE}
+m1$calculate(c('tau','x')) ## Wrong: the lifted node is being neglected
+```
+
+The correct way to do this is with model-generic programming:
+```{r, eval = FALSE}
+m1$calculate( m1$getDependencies('tau') )
+```
+
+The second common situation that creates lifted nodes is:
+```{r, fig.cap=""}
+m2 <- nimbleModel(
+    nimbleCode({
+        a ~ dnorm(0, 1)
+        b ~ dnorm(a + 1, 1)
+    }))
+plot(m2$getGraph())
+m2$getNodeNames()
+```
+
+In this case, NIMBLE lifted the expression `a+1` and created a node
+for it.   Again the correct way to program is to query a model to
+learn about its nodes.  Do not assume you know what the nodes are.
+

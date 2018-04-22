@@ -1,0 +1,456 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Strategies for improving MCMC in NIMBLE</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Strategies for improving MCMC in NIMBLE</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="we-will-use-the-house-martin-state-space-model-as-an-example" class="slide section level1">
+<h1>We will use the house martin state-space model as an example</h1>
+<p>This model is highly conjugate. Such rare models are where JAGS is at its best.</p>
+<p>This model is easily sampled, so it is not in great need of improvement, but examples with it run quickly.</p>
+<p>Agenda:</p>
+<ol style="list-style-type: decimal">
+<li>Introduction</li>
+<li>Study the model and re-write it.</li>
+<li>Set up a variety of sampler configurations and see what works.</li>
+</ol>
+</div>
+<div id="terminology" class="slide section level1">
+<h1>Terminology</h1>
+<ul>
+<li>&quot;target&quot; node(s) = node(s) to be sampled (or &quot;updated&quot;) by a particular MCMC sampler.</li>
+</ul>
+</div>
+<div id="think-like-the-graph" class="slide section level1">
+<h1>Think like the graph</h1>
+<ul>
+<li><p>The &quot;graph&quot; refers to the model, emphasizing relationships among nodes</p>
+<ul>
+<li>A node is a model &quot;vertex&quot;</li>
+<li>A dependency is a model &quot;edge&quot;</li>
+</ul></li>
+<li><p>For many MCMC samplers, only the part of the model conditionally dependent on the target nodes needs to be used in calculations.</p>
+<ul>
+<li>Example: sampler on <code>r[25]</code> the penultimate (2nd from last) environmental (&quot;process&quot;) noise value</li>
+<li>The model's <code>getDependencies</code> method shows what part of the model will need calculation.</li>
+</ul></li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">martin_model$<span class="kw">getDependencies</span>(<span class="st">&#39;r[25]&#39;</span>)</code></pre></div>
+<pre><code>## [1] &quot;r[25]&quot;        &quot;logN.est[26]&quot; &quot;y[26]&quot;        &quot;N.est[26]&quot;</code></pre>
+<p>We see that <code>r[25]</code> is needed to calculate:</p>
+<ul>
+<li>its own log probability</li>
+<li>true log population size at the next time (<code>logN.est[26]</code>)</li>
+<li>actual population size at the next time (<code>N.est[26]</code>) (which is not needed for the MCMC).</li>
+<li>log probability of the next observation (<code>y[26]</code>).</li>
+</ul>
+<p>Thinking about the graph will allow you to save computation by:</p>
+<ul>
+<li>avoiding unnecessary computation (we'll do that now)</li>
+<li>grouping calculations that are always done together (we'll see examples of this later).</li>
+</ul>
+</div>
+<div id="re-write-the-model-to-avoid-unnecessary-computation" class="slide section level1">
+<h1>Re-write the model to avoid unnecessary computation</h1>
+<p>Let's look more closely at this model.</p>
+<ul>
+<li>Dependencies of <code>r[24]</code>:</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">martin_model$<span class="kw">getDependencies</span>(<span class="st">&#39;r[24]&#39;</span>)</code></pre></div>
+<pre><code>## [1] &quot;r[24]&quot;        &quot;logN.est[25]&quot; &quot;logN.est[26]&quot; &quot;y[25]&quot;       
+## [5] &quot;N.est[25]&quot;    &quot;y[26]&quot;        &quot;N.est[26]&quot;</code></pre>
+<ul>
+<li>Dependencies of <code>r[20]</code>:</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">martin_model$<span class="kw">getDependencies</span>(<span class="st">&#39;r[20]&#39;</span>)</code></pre></div>
+<pre><code>##  [1] &quot;r[20]&quot;        &quot;logN.est[21]&quot; &quot;logN.est[22]&quot; &quot;y[21]&quot;       
+##  [5] &quot;N.est[21]&quot;    &quot;logN.est[23]&quot; &quot;y[22]&quot;        &quot;N.est[22]&quot;   
+##  [9] &quot;logN.est[24]&quot; &quot;y[23]&quot;        &quot;N.est[23]&quot;    &quot;logN.est[25]&quot;
+## [13] &quot;y[24]&quot;        &quot;N.est[24]&quot;    &quot;logN.est[26]&quot; &quot;y[25]&quot;       
+## [17] &quot;N.est[25]&quot;    &quot;y[26]&quot;        &quot;N.est[26]&quot;</code></pre>
+<ul>
+<li>Dependencies of <code>r[1]</code>:</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">martin_model$<span class="kw">getDependencies</span>(<span class="st">&#39;r[1]&#39;</span>)</code></pre></div>
+<pre><code>##  [1] &quot;r[1]&quot;         &quot;logN.est[2]&quot;  &quot;logN.est[3]&quot;  &quot;y[2]&quot;        
+##  [5] &quot;N.est[2]&quot;     &quot;logN.est[4]&quot;  &quot;y[3]&quot;         &quot;N.est[3]&quot;    
+##  [9] &quot;logN.est[5]&quot;  &quot;y[4]&quot;         &quot;N.est[4]&quot;     &quot;logN.est[6]&quot; 
+## [13] &quot;y[5]&quot;         &quot;N.est[5]&quot;     &quot;logN.est[7]&quot;  &quot;y[6]&quot;        
+## [17] &quot;N.est[6]&quot;     &quot;logN.est[8]&quot;  &quot;y[7]&quot;         &quot;N.est[7]&quot;    
+## [21] &quot;logN.est[9]&quot;  &quot;y[8]&quot;         &quot;N.est[8]&quot;     &quot;logN.est[10]&quot;
+## [25] &quot;y[9]&quot;         &quot;N.est[9]&quot;     &quot;logN.est[11]&quot; &quot;y[10]&quot;       
+## [29] &quot;N.est[10]&quot;    &quot;logN.est[12]&quot; &quot;y[11]&quot;        &quot;N.est[11]&quot;   
+## [33] &quot;logN.est[13]&quot; &quot;y[12]&quot;        &quot;N.est[12]&quot;    &quot;logN.est[14]&quot;
+## [37] &quot;y[13]&quot;        &quot;N.est[13]&quot;    &quot;logN.est[15]&quot; &quot;y[14]&quot;       
+## [41] &quot;N.est[14]&quot;    &quot;logN.est[16]&quot; &quot;y[15]&quot;        &quot;N.est[15]&quot;   
+## [45] &quot;logN.est[17]&quot; &quot;y[16]&quot;        &quot;N.est[16]&quot;    &quot;logN.est[18]&quot;
+## [49] &quot;y[17]&quot;        &quot;N.est[17]&quot;    &quot;logN.est[19]&quot; &quot;y[18]&quot;       
+## [53] &quot;N.est[18]&quot;    &quot;logN.est[20]&quot; &quot;y[19]&quot;        &quot;N.est[19]&quot;   
+## [57] &quot;logN.est[21]&quot; &quot;y[20]&quot;        &quot;N.est[20]&quot;    &quot;logN.est[22]&quot;
+## [61] &quot;y[21]&quot;        &quot;N.est[21]&quot;    &quot;logN.est[23]&quot; &quot;y[22]&quot;       
+## [65] &quot;N.est[22]&quot;    &quot;logN.est[24]&quot; &quot;y[23]&quot;        &quot;N.est[23]&quot;   
+## [69] &quot;logN.est[25]&quot; &quot;y[24]&quot;        &quot;N.est[24]&quot;    &quot;logN.est[26]&quot;
+## [73] &quot;y[25]&quot;        &quot;N.est[25]&quot;    &quot;y[26]&quot;        &quot;N.est[26]&quot;</code></pre>
+<p>We can see that because of the way the model is parameterized, there are long chains of dependencies. To sample <code>r[1]</code>, the first environmental noise value, nearly the entire model needs to be calculated.</p>
+<p>Even worse, the computational burden of sampling this state-space model as written increases non-linearly with the length of the model.</p>
+<h4 id="another-way-to-write-this-model">Another way to write this model</h4>
+<p>We can re-write the model so that the latent population size at each time is stochastic, rather than having a separate stochastic environmental noise at each time. The two ways to write the model are statistically equivalent.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">martin_code_alt &lt;-<span class="st"> </span><span class="kw">nimbleCode</span>({
+<span class="co"># Priors and constraints</span>
+logN.est[<span class="dv">1</span>] ~<span class="st"> </span><span class="kw">dnorm</span>(<span class="fl">5.6</span>, <span class="fl">0.01</span>)       <span class="co"># Prior for initial population size</span>
+mean.r ~<span class="st"> </span><span class="kw">dnorm</span>(<span class="dv">1</span>, <span class="fl">0.001</span>)             <span class="co"># Prior for mean growth rate</span>
+sigma.proc ~<span class="st"> </span><span class="kw">dunif</span>(<span class="dv">0</span>, <span class="dv">1</span>)          <span class="co"># Prior for sd of state process</span>
+sigma2.proc &lt;-<span class="st"> </span><span class="kw">pow</span>(sigma.proc, <span class="dv">2</span>)
+tau.proc &lt;-<span class="st"> </span><span class="kw">pow</span>(sigma.proc, -<span class="dv">2</span>)
+sigma.obs ~<span class="st"> </span><span class="kw">dunif</span>(<span class="dv">0</span>, <span class="dv">1</span>)           <span class="co"># Prior for sd of observation process</span>
+sigma2.obs &lt;-<span class="st"> </span><span class="kw">pow</span>(sigma.obs, <span class="dv">2</span>)
+tau.obs &lt;-<span class="st"> </span><span class="kw">pow</span>(sigma.obs, -<span class="dv">2</span>)
+
+<span class="co"># Likelihood</span>
+<span class="co"># State process</span>
+for (t in <span class="dv">1</span>:(T<span class="dv">-1</span>)) {
+    logN.est[t<span class="dv">+1</span>] ~<span class="st"> </span><span class="kw">dnorm</span>(logN.est[t] +<span class="st"> </span>mean.r, tau.proc)
+}
+
+<span class="co"># Observation process</span>
+for (t in <span class="dv">1</span>:T) {
+    y[t] ~<span class="st"> </span><span class="kw">dnorm</span>(logN.est[t], tau.obs)
+}
+
+<span class="co"># Population sizes on real scale</span>
+for (t in <span class="dv">1</span>:T) {
+    N.est[t] &lt;-<span class="st"> </span><span class="kw">exp</span>(logN.est[t])
+}
+})</code></pre></div>
+<p>Now we can see how this makes a lighter dependency structure:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">martin_model_alt &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(martin_code_alt,
+                                <span class="dt">constants =</span> bugs.data,
+                                <span class="dt">inits =</span> <span class="kw">martin_inits</span>())</code></pre></div>
+<pre><code>## defining model...</code></pre>
+<pre><code>## Detected y as data within &#39;constants&#39;.</code></pre>
+<pre><code>## Adding y as data for building model.</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## setting data and initial values...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">martin_model_alt$<span class="kw">getDependencies</span>(<span class="st">&#39;logN.est[20]&#39;</span>)</code></pre></div>
+<pre><code>## [1] &quot;logN.est[20]&quot;                                      
+## [2] &quot;lifted_logN_dot_est_oBt_cB_plus_mean_dot_r_L10[20]&quot;
+## [3] &quot;y[20]&quot;                                             
+## [4] &quot;N.est[20]&quot;                                         
+## [5] &quot;logN.est[21]&quot;</code></pre>
+<p>The computational cost of the dependency structure is not the only consideration here. Changing the parameterization can also change the posterior correlations among latent states, which can affect mixing. But in this case decreasing the computational cost turns out to be a good move.</p>
+<h4 id="compare-mcmcs">Compare MCMCs</h4>
+<p>We'll use <code>compareMCMCs</code> and related functions to compare MCMC efficiency for the original and alternate way to write the model. We can run each of them in JAGS and NIMBLE.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">set.seed</span>(<span class="dv">1</span>)
+ourInits &lt;-<span class="st"> </span><span class="kw">martin_inits</span>()
+mcmcResult &lt;-<span class="st"> </span><span class="kw">compareMCMCs</span>(
+     <span class="kw">list</span>(<span class="dt">original =</span> <span class="kw">list</span>(<span class="dt">code =</span> martin_code, <span class="dt">inits =</span> ourInits, <span class="dt">data =</span> bugs.data)),
+     <span class="dt">niter =</span> <span class="dv">50000</span>, <span class="dt">burnin =</span> <span class="dv">5000</span>, <span class="dt">MCMCs =</span> <span class="kw">c</span>(<span class="st">&#39;nimble&#39;</span>,<span class="st">&#39;jags&#39;</span>), <span class="dt">summary =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>## Working on original</code></pre>
+<pre><code>## defining model...</code></pre>
+<pre><code>## Detected y as data within &#39;constants&#39;.</code></pre>
+<pre><code>## Adding y as data for building model.</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## setting data and initial values...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
+<pre><code>## Compiling model graph
+##    Resolving undeclared variables
+##    Allocating nodes
+## Graph information:
+##    Observed stochastic nodes: 20
+##    Unobserved stochastic nodes: 35
+##    Total graph size: 128
+## 
+## Initializing model</code></pre>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.
+## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.</code></pre>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">mcmcResultAlt &lt;-<span class="st"> </span><span class="kw">compareMCMCs</span>(
+     <span class="kw">list</span>(<span class="dt">rewritten =</span> <span class="kw">list</span>(<span class="dt">code =</span> martin_code_alt, <span class="dt">inits =</span> ourInits, <span class="dt">data =</span> bugs.data)),
+     <span class="dt">niter =</span> <span class="dv">50000</span>, <span class="dt">burnin =</span> <span class="dv">5000</span>, <span class="dt">MCMCs =</span> <span class="kw">c</span>(<span class="st">&#39;nimble&#39;</span>, <span class="st">&#39;jags&#39;</span>), <span class="dt">summary =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>## Working on rewritten</code></pre>
+<pre><code>## defining model...</code></pre>
+<pre><code>## Detected y as data within &#39;constants&#39;.</code></pre>
+<pre><code>## Adding y as data for building model.
+## building model...
+## setting data and initial values...
+## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
+<pre><code>## Compiling model graph
+##    Resolving undeclared variables
+##    Allocating nodes
+## Graph information:
+##    Observed stochastic nodes: 20
+##    Unobserved stochastic nodes: 35
+##    Total graph size: 128
+## 
+## Initializing model</code></pre>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.
+## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.</code></pre>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## Do some relabeling before combining results into one figure
+mcmcResultAlt[[<span class="dv">1</span>]] &lt;-<span class="st"> </span><span class="kw">rename_MCMC_comparison_method</span>(<span class="st">&#39;nimble&#39;</span>, <span class="st">&#39;nimble(alt)&#39;</span>,
+                                                    mcmcResultAlt[[<span class="dv">1</span>]])
+mcmcResultAlt[[<span class="dv">1</span>]] &lt;-<span class="st"> </span><span class="kw">rename_MCMC_comparison_method</span>(<span class="st">&#39;jags&#39;</span>, <span class="st">&#39;jags(alt)&#39;</span>,
+                                                    mcmcResultAlt[[<span class="dv">1</span>]])
+
+mcmcBoth &lt;-<span class="st"> </span><span class="kw">combine_MCMC_comparison_results</span>(mcmcResult[[<span class="dv">1</span>]], mcmcResultAlt[[<span class="dv">1</span>]])
+
+<span class="kw">make_MCMC_comparison_pages</span>(mcmcBoth, <span class="dt">dir =</span> <span class="st">&#39;martin_MCMC_comparison&#39;</span>)</code></pre></div>
+<p>The results are <a href="martin_MCMC_comparison/MCMCresults.html">here</a></p>
+<p>It does look like the alternative version yields faster MCMC for both NIMBLE and JAGS.</p>
+</div>
+<div id="strategies-for-customizing-mcmc-configurations" class="slide section level1">
+<h1>Strategies for customizing MCMC configurations</h1>
+<ul>
+<li><p>Below we will set up functions to create a variety of custom MCMC configurations.</p></li>
+<li><p>Then we will run a big comparison of all ideas.</p></li>
+</ul>
+</div>
+<div id="identify-worst-mixing-parameters-and-focus-on-them" class="slide section level1">
+<h1>Identify worst-mixing parameters and focus on them</h1>
+<p>We see from the <code>compareMCMCs</code> figures that <code>sigma.obs</code> and <code>sigma.proc</code> are the worst-mixing parameters. It is not uncommon for a random effects standard deviation to mix slowly.</p>
+</div>
+<div id="sample-some-nodes-on-a-log-scale" class="slide section level1">
+<h1>Sample some nodes on a log scale</h1>
+<h2 id="replace-samplers-with-rw-mh-on-a-log-scale"><strong>Replace</strong> samplers with RW-MH on a log scale</h2>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">assignRWlogScale &lt;-<span class="st"> </span>function(MCMCconf, nodes) {
+    for(node in nodes) {
+        MCMCconf$<span class="kw">removeSamplers</span>(node)
+        MCMCconf$<span class="kw">addSampler</span>(<span class="dt">target =</span> node,
+                            <span class="dt">type =</span> <span class="st">&#39;RW&#39;</span>,
+                            <span class="dt">control =</span> <span class="kw">list</span>(<span class="dt">log =</span> <span class="ot">TRUE</span>))
+    }
+    MCMCconf
+}
+## Following is needed only when generating html
+.GlobalEnv$assignRWlogScale &lt;-<span class="st"> </span>assignRWlogScale</code></pre></div>
+</div>
+<div id="sample-some-nodes-more-often" class="slide section level1">
+<h1>Sample some nodes more often</h1>
+<h2 id="add-extra-rw-mh-samplers-on-a-log-scale">Add <strong>extra</strong> RW-MH samplers on a log scale</h2>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">addRWlogScale &lt;-<span class="st"> </span>function(MCMCconf, nodes) {
+    numSamplers &lt;-<span class="st"> </span><span class="kw">length</span>(MCMCconf$<span class="kw">getSamplers</span>())
+    iHalf &lt;-<span class="st"> </span><span class="kw">ceiling</span>(numSamplers/<span class="dv">2</span>)
+    for(node in nodes) {
+        MCMCconf$<span class="kw">addSampler</span>(<span class="dt">target =</span> node,
+                            <span class="dt">type =</span> <span class="st">&#39;RW&#39;</span>,
+                            <span class="dt">control =</span> <span class="kw">list</span>(<span class="dt">log =</span> <span class="ot">TRUE</span>))
+    }
+    ## re-order samplers so the new ones are in the middle of the list
+    MCMCconf$<span class="kw">setSamplers</span>(<span class="kw">c</span>(<span class="dv">1</span>:iHalf, ## first half of original list
+    (numSamplers<span class="dv">+1</span>):(numSamplers+<span class="kw">length</span>(nodes)), ## new samplers from end of list
+    (iHalf<span class="dv">+1</span>):numSamplers)) ## second half of original list
+    MCMCconf
+}
+.GlobalEnv$addRWlogScale &lt;-<span class="st"> </span>addRWlogScale</code></pre></div>
+</div>
+<div id="try-some-different-samplers" class="slide section level1">
+<h1>Try some different samplers</h1>
+<p>Latent states are sampled with conjugate (Gibbs) samplers. This is effective but more costly than RW-MH sampling. Let's try using RW-MH.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">assignRW &lt;-<span class="st"> </span>function(MCMCconf, model, nodes) {
+    nodes &lt;-<span class="st"> </span>model$<span class="kw">expandNodeNames</span>(nodes)
+    for(node in nodes) {
+        MCMCconf$<span class="kw">removeSamplers</span>(node)
+        MCMCconf$<span class="kw">addSampler</span>(<span class="dt">target =</span> node,
+                            <span class="dt">type =</span> <span class="st">&#39;RW&#39;</span>)
+    }
+    MCMCconf
+}
+## Following is needed only when generating html
+.GlobalEnv$assignRW &lt;-<span class="st"> </span>assignRW</code></pre></div>
+</div>
+<div id="manual-blocking" class="slide section level1">
+<h1>Manual blocking</h1>
+<p>NIMBLE comes with two kinds of block samplers:</p>
+<ul>
+<li>Adaptive multivariate normal random-walk block sampler: This makes multivariate normal proposals using a covariance matrix that adapts to the shape of the posterior.</li>
+<li>Automated factor slice sampler: This uses slice samplers in rotated corrdinates. This is more computationally intense but will ensure that moves are made.</li>
+</ul>
+<p>Let's try blocking groups of three latent states using block RW-MH or AFSS:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">blockStates &lt;-<span class="st"> </span>function(MCMCconf, Rmodel, states, type) {
+    stateNodes &lt;-<span class="st"> </span>Rmodel$<span class="kw">expandNodeNames</span>(states)
+    numStates &lt;-<span class="st"> </span><span class="kw">length</span>(stateNodes)
+    numBlocks &lt;-<span class="st"> </span><span class="kw">ceiling</span>(numStates/<span class="dv">3</span>)
+    for(i in <span class="dv">1</span>:numBlocks) {
+        iStart &lt;-<span class="st"> </span>(<span class="dv">3</span>*(i<span class="dv">-1</span>)+<span class="dv">1</span>)       ## 1, 4, 7, 10 etc.
+        iEnd &lt;-<span class="st"> </span><span class="kw">min</span>(<span class="dv">3</span>*i, numStates) ## 3, 6, 9, 12 etc. or max
+        blockNodes &lt;-<span class="st"> </span>stateNodes[iStart:iEnd]
+        MCMCconf$<span class="kw">removeSamplers</span>(blockNodes)
+        ## check if there is a singleton at the end
+        if(iEnd &gt;<span class="st"> </span>iStart) {
+            MCMCconf$<span class="kw">addSampler</span>(blockNodes, <span class="dt">type =</span> type, <span class="dt">silent =</span> <span class="ot">TRUE</span>)
+        } else {
+            MCMCconf$<span class="kw">addSampler</span>(blockNodes, <span class="dt">type =</span> <span class="st">&#39;RW&#39;</span>) ## in case there is a singleton
+        }
+    }
+    MCMCconf
+}
+
+.GlobalEnv$blockStates &lt;-<span class="st"> </span>blockStates</code></pre></div>
+</div>
+<div id="automatic-blocking" class="slide section level1">
+<h1>Automatic blocking</h1>
+<ul>
+<li><p>NIMBLE includes an algorithm (Turek et al. 2016) that automatically searches for good blocking combinations.</p></li>
+<li><p>This takes additional time, but it is worth it if you can re-use what you learn.</p></li>
+<li><p>It is available as an option to <code>configureMCMC</code> or <code>compareMCMCs</code>.</p></li>
+</ul>
+<p>For this model, autoBlock did not help, so we'll illustrate it later.</p>
+</div>
+<div id="write-new-samplers" class="slide section level1">
+<h1>Write new samplers</h1>
+<p>We will learn how to do this later.</p>
+</div>
+<div id="defer-posterior-predictive-computations-until-after-mcmc" class="slide section level1">
+<h1>Defer posterior predictive computations until after MCMC</h1>
+<p>In this model, years 2010-2015 (<code>y[21]</code> - <code>y[26]</code>) are posterior-predictive. They do not need to be sampled during parameter estimation, although BUGS/JAGS users are accustomed to doing so.</p>
+<p>We will show later how posterior predictive sampling can be done separately from MCMC.</p>
+</div>
+<div id="putting-it-all-together-the-race-is-on" class="slide section level1">
+<h1>Putting it all together: The race is on</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">MCMCdefs =<span class="st"> </span><span class="kw">list</span>(
+    <span class="dt">RWsigmaLogScale =</span> <span class="kw">quote</span>({<span class="kw">assignRWlogScale</span>(<span class="kw">configureMCMC</span>(Rmodel),
+                                         <span class="kw">c</span>(<span class="st">&#39;sigma.proc&#39;</span>,<span class="st">&#39;sigma.obs&#39;</span>))}),
+    <span class="dt">RWsigmaLogScale2 =</span> <span class="kw">quote</span>({<span class="kw">addRWlogScale</span>(<span class="kw">assignRWlogScale</span>(<span class="kw">configureMCMC</span>(Rmodel),
+                                                        <span class="kw">c</span>(<span class="st">&#39;sigma.proc&#39;</span>,<span class="st">&#39;sigma.obs&#39;</span>)),
+                                       <span class="kw">c</span>(<span class="st">&#39;sigma.proc&#39;</span>,<span class="st">&#39;sigma.obs&#39;</span>))}),
+    <span class="dt">RWstates =</span> <span class="kw">quote</span>({<span class="kw">assignRW</span>(<span class="kw">configureMCMC</span>(Rmodel),
+                               Rmodel,
+                               <span class="st">&#39;logN.est&#39;</span>)}),
+    <span class="dt">RWstates_RWsigmaLogScale =</span> <span class="kw">quote</span>({<span class="kw">assignRW</span>(<span class="kw">assignRWlogScale</span>(<span class="kw">configureMCMC</span>(Rmodel),
+                                                                <span class="kw">c</span>(<span class="st">&#39;sigma.proc&#39;</span>,<span class="st">&#39;sigma.obs&#39;</span>)),
+                                               Rmodel,
+                                               <span class="st">&#39;logN.est&#39;</span>)}),
+    <span class="dt">RWblockStates =</span> <span class="kw">quote</span>({<span class="kw">blockStates</span>(<span class="kw">configureMCMC</span>(Rmodel),
+                                       Rmodel,
+                                       <span class="st">&#39;logN.est&#39;</span>,
+                                       <span class="st">&#39;RW_block&#39;</span>)}),
+    <span class="dt">RWblockStates_RWsigmaLogScale =</span> <span class="kw">quote</span>({<span class="kw">blockStates</span>(
+                                               <span class="kw">assignRWlogScale</span>(<span class="kw">configureMCMC</span>(Rmodel),
+                                                                <span class="kw">c</span>(<span class="st">&#39;sigma.proc&#39;</span>,<span class="st">&#39;sigma.obs&#39;</span>)),
+                                               Rmodel,
+                                               <span class="st">&#39;logN.est&#39;</span>,
+                                               <span class="st">&#39;RW_block&#39;</span>)})
+)
+
+house_martin_comparisons &lt;-<span class="st"> </span><span class="kw">compareMCMCs</span>(
+    <span class="kw">list</span>(<span class="dt">house_martin =</span> <span class="kw">list</span>(<span class="dt">code =</span> martin_code_alt,
+                             <span class="dt">inits =</span> ourInits,
+                             <span class="dt">data =</span> bugs.data)),
+    <span class="dt">niter =</span> <span class="dv">50000</span>,
+    <span class="dt">burnin =</span> <span class="dv">5000</span>,
+    <span class="dt">MCMCdefs =</span> MCMCdefs,
+    <span class="dt">MCMCs =</span> <span class="kw">c</span>(<span class="st">&#39;nimble&#39;</span>, <span class="st">&#39;jags&#39;</span>, <span class="kw">names</span>(MCMCdefs)),
+    <span class="dt">summary =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>## Working on house_martin</code></pre>
+<pre><code>## defining model...</code></pre>
+<pre><code>## Detected y as data within &#39;constants&#39;.</code></pre>
+<pre><code>## Adding y as data for building model.</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## setting data and initial values...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
+<pre><code>## Compiling model graph
+##    Resolving undeclared variables
+##    Allocating nodes
+## Graph information:
+##    Observed stochastic nodes: 20
+##    Unobserved stochastic nodes: 35
+##    Total graph size: 128
+## 
+## Initializing model</code></pre>
+<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.
+## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
+## compilation finished.</code></pre>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">make_MCMC_comparison_pages</span>(house_martin_comparisons,
+                           <span class="dt">dir =</span> <span class="st">&quot;martin_MCMC_comparison_many&quot;</span>,
+                           <span class="dt">modelNames =</span> <span class="st">&quot;house_martin&quot;</span>)</code></pre></div>
+<p>The results are <a href="martin_MCMC_comparison_many/house_martin.html">here</a>.</p>
+<p>These methods are not very different. In more complicated models, we can see much bigger performance differences between methods. We can conclude that blocking groups of latent states did not help, while sampling standard deviations on a log scale did help.</p>
+<p>Again, this was a simple example to illustrate the process of comparing MCMC methods.</p>
+</div>
+</body>
+</html>

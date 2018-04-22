@@ -79,38 +79,110 @@ mcmcBoth <- combine_MCMC_comparison_results(mcmcResult[[1]], mcmcResultAlt[[1]])
 
 make_MCMC_comparison_pages(mcmcBoth, dir = 'martin_MCMC_comparison')
 
+## ----sigma-log-scale-----------------------------------------------------
+assignRWlogScale <- function(MCMCconf, nodes) {
+    for(node in nodes) {
+        MCMCconf$removeSamplers(node)
+        MCMCconf$addSampler(target = node,
+                            type = 'RW',
+                            control = list(log = TRUE))
+    }
+    MCMCconf
+}
+## Following is needed only when generating html
+.GlobalEnv$assignRWlogScale <- assignRWlogScale
+
+
+## ----add-sigma-log-scale-------------------------------------------------
+addRWlogScale <- function(MCMCconf, nodes) {
+    numSamplers <- length(MCMCconf$getSamplers())
+    iHalf <- ceiling(numSamplers/2)
+    for(node in nodes) {
+        MCMCconf$addSampler(target = node,
+                            type = 'RW',
+                            control = list(log = TRUE))
+    }
+    ## re-order samplers so the new ones are in the middle of the list
+    MCMCconf$setSamplers(c(1:iHalf, ## first half of original list
+    (numSamplers+1):(numSamplers+length(nodes)), ## new samplers from end of list
+    (iHalf+1):numSamplers)) ## second half of original list
+    MCMCconf
+}
+.GlobalEnv$addRWlogScale <- addRWlogScale
+
+## ----use-RW--------------------------------------------------------------
+assignRW <- function(MCMCconf, model, nodes) {
+    nodes <- model$expandNodeNames(nodes)
+    for(node in nodes) {
+        MCMCconf$removeSamplers(node)
+        MCMCconf$addSampler(target = node,
+                            type = 'RW')
+    }
+    MCMCconf
+}
+## Following is needed only when generating html
+.GlobalEnv$assignRW <- assignRW
+
+
 ## ------------------------------------------------------------------------
-configureAFSSsigmas <- function(Rmodel) {
-    MCMCconf <- configureMCMC(Rmodel)
-    MCMCconf$removeSamplers('sigma.proc')
-    MCMCconf$removeSamplers('sigma.obs')
-    MCMCconf$addSampler(target = c('sigma.proc','sigma.obs'),
-                        type = 'AF_slice')
+blockStates <- function(MCMCconf, Rmodel, states, type) {
+    stateNodes <- Rmodel$expandNodeNames(states)
+    numStates <- length(stateNodes)
+    numBlocks <- ceiling(numStates/3)
+    for(i in 1:numBlocks) {
+        iStart <- (3*(i-1)+1)       ## 1, 4, 7, 10 etc.
+        iEnd <- min(3*i, numStates) ## 3, 6, 9, 12 etc. or max
+        blockNodes <- stateNodes[iStart:iEnd]
+        MCMCconf$removeSamplers(blockNodes)
+        ## check if there is a singleton at the end
+        if(iEnd > iStart) {
+            MCMCconf$addSampler(blockNodes, type = type, silent = TRUE)
+        } else {
+            MCMCconf$addSampler(blockNodes, type = 'RW') ## in case there is a singleton
+        }
+    }
     MCMCconf
 }
 
-configureRWBsigmas <- function(Rmodel) {
-    MCMCconf <- configureMCMC(Rmodel)
-    MCMCconf$removeSamplers('sigma.proc')
-    MCMCconf$removeSamplers('sigma.obs')
-    MCMCconf$addSampler(target = c('sigma.proc','sigma.obs'),
-                        type = 'RW_block')
-    MCMCconf
-}
+.GlobalEnv$blockStates <- blockStates
 
-## Next two lines are needed only when generating html
-.GlobalEnv$configureAFSSsigmas <- configureAFSSsigmas
-.GlobalEnv$configureRWBsigmas <- configureRWBsigmas
+## ----compare-mcmcs-------------------------------------------------------
+MCMCdefs = list(
+    RWsigmaLogScale = quote({assignRWlogScale(configureMCMC(Rmodel),
+                                         c('sigma.proc','sigma.obs'))}),
+    RWsigmaLogScale2 = quote({addRWlogScale(assignRWlogScale(configureMCMC(Rmodel),
+                                                        c('sigma.proc','sigma.obs')),
+                                       c('sigma.proc','sigma.obs'))}),
+    RWstates = quote({assignRW(configureMCMC(Rmodel),
+                               Rmodel,
+                               'logN.est')}),
+    RWstates_RWsigmaLogScale = quote({assignRW(assignRWlogScale(configureMCMC(Rmodel),
+                                                                c('sigma.proc','sigma.obs')),
+                                               Rmodel,
+                                               'logN.est')}),
+    RWblockStates = quote({blockStates(configureMCMC(Rmodel),
+                                       Rmodel,
+                                       'logN.est',
+                                       'RW_block')}),
+    RWblockStates_RWsigmaLogScale = quote({blockStates(
+                                               assignRWlogScale(configureMCMC(Rmodel),
+                                                                c('sigma.proc','sigma.obs')),
+                                               Rmodel,
+                                               'logN.est',
+                                               'RW_block')})
+)
 
-mcmcResultBlockSigmas <- compareMCMCs(
-    list(original = list(code = martin_code_alt, inits = ourInits, data = bugs.data)),
+house_martin_comparisons <- compareMCMCs(
+    list(house_martin = list(code = martin_code_alt,
+                             inits = ourInits,
+                             data = bugs.data)),
     niter = 50000,
     burnin = 5000,
-    MCMCdefs = list(
-        AFSSsigmas = quote({configureAFSSsigmas(Rmodel)}),
-        RWBsigmas = quote({configureRWBsigmas(Rmodel)})
-    ),
-    MCMCs = c('AFSSsigmas', 'RWBsigmas'),
+    MCMCdefs = MCMCdefs,
+    MCMCs = c('nimble', 'jags', names(MCMCdefs)),
     summary = TRUE)
 
+make_MCMC_comparison_pages(house_martin_comparisons,
+                           dir = "martin_MCMC_comparison_many",
+                           modelNames = "house_martin")
 

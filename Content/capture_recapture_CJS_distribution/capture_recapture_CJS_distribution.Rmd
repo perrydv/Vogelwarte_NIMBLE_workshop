@@ -46,31 +46,7 @@ The important part for us is the software flexibility, not the math.
 
 # Example: Dipper data
 
-- Very common example
-- Used for NIMBLE in Turek et al. (2016), Bayesian Analysis.
-- We ignore covariates for sex and flood years or order to create the simplest possible model for software illustration.  (We don't recommend skipping important variables in real analyses!)
-- 294 birds
-- 7 years
-
-# Standard BUGS code
-
-Typical BUGS code for this model would be something like this:
-
-```{r dipper-basic-model}
-dipper_code
-```
-
-### Node definitions
-
-- `phi` = survival probability
-- `p` = detection (capture) probability
-- `x[i, t]` = alive (1) or dead (0) for individual `i` at time `t`
-- `y[i, t]` = captured (1) or not captured (0) for individual `i` at time `t`.
-- `first[i]` = year of first capture for individual `i`
-
-### Additional setup
-- `x[i, t]` is data from first to last capture for individual `i`, and latent state thereafter.
-- `y[i, t]` is not defined before first capture for individual `i`.
+The dipper data are introduced [here](../example_CJS_dipper/example_CJS_dipper_slides.html).
 
 ### Think about the graph and the sampling
 - Every time `phi` or `p` is sampled, the entire model needs recalculation, so those are costly.

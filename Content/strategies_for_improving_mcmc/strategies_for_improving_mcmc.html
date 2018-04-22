@@ -147,13 +147,20 @@ $(document).ready(function () {
 <li><a href="#terminology">Terminology</a></li>
 <li><a href="#think-like-the-graph">Think like the graph</a></li>
 <li><a href="#re-write-the-model-to-avoid-unnecessary-computation">Re-write the model to avoid unnecessary computation</a></li>
+<li><a href="#strategies-for-customizing-mcmc-configurations">Strategies for customizing MCMC configurations</a></li>
+<li><a href="#identify-worst-mixing-parameters-and-focus-on-them">Identify worst-mixing parameters and focus on them</a></li>
+<li><a href="#sample-some-nodes-on-a-log-scale">Sample some nodes on a log scale</a><ul>
+<li><a href="#replace-samplers-with-rw-mh-on-a-log-scale"><strong>Replace</strong> samplers with RW-MH on a log scale</a></li>
+</ul></li>
+<li><a href="#sample-some-nodes-more-often">Sample some nodes more often</a><ul>
+<li><a href="#add-extra-rw-mh-samplers-on-a-log-scale">Add <strong>extra</strong> RW-MH samplers on a log scale</a></li>
+</ul></li>
+<li><a href="#try-some-different-samplers">Try some different samplers</a></li>
 <li><a href="#manual-blocking">Manual blocking</a></li>
 <li><a href="#automatic-blocking">Automatic blocking</a></li>
-<li><a href="#sample-some-nodes-on-a-log-scale-especially-sigmas">Sample some nodes on a log scale (especially sigmas)</a></li>
-<li><a href="#sample-some-nodes-more-often">Sample some nodes more often</a></li>
-<li><a href="#try-different-kinds-of-samplers">Try different kinds of samplers</a></li>
 <li><a href="#write-new-samplers">Write new samplers</a></li>
 <li><a href="#defer-posterior-predictive-computations-until-after-mcmc">Defer posterior predictive computations until after MCMC</a></li>
+<li><a href="#putting-it-all-together-the-race-is-on">Putting it all together: The race is on</a></li>
 </ul>
 </div>
 
@@ -161,6 +168,12 @@ $(document).ready(function () {
 <h1>We will use the house martin state-space model as an example</h1>
 <p>This model is highly conjugate. Such rare models are where JAGS is at its best.</p>
 <p>This model is easily sampled, so it is not in great need of improvement, but examples with it run quickly.</p>
+<p>Agenda:</p>
+<ol style="list-style-type: decimal">
+<li>Introduction</li>
+<li>Study the model and re-write it.</li>
+<li>Set up a variety of sampler configurations and see what works.</li>
+</ol>
 </div>
 <div id="terminology" class="section level1">
 <h1>Terminology</h1>
@@ -242,7 +255,7 @@ $(document).ready(function () {
 <p>Even worse, the computational burden of sampling this state-space model as written increases non-linearly with the length of the model.</p>
 <div id="another-way-to-write-this-model" class="section level4">
 <h4>Another way to write this model</h4>
-<p>We can re-write the model so that the latent population size at each is stochastic, rather than the environmental noise at each time. The modes are statistically equivalent.</p>
+<p>We can re-write the model so that the latent population size at each time is stochastic, rather than having a separate stochastic environmental noise at each time. The two ways to write the model are statistically equivalent.</p>
 <pre class="r"><code>martin_code_alt &lt;- nimbleCode({
 # Priors and constraints
 logN.est[1] ~ dnorm(5.6, 0.01)       # Prior for initial population size
@@ -288,6 +301,7 @@ for (t in 1:T) {
 ## [3] &quot;y[20]&quot;                                             
 ## [4] &quot;N.est[20]&quot;                                         
 ## [5] &quot;logN.est[21]&quot;</code></pre>
+<p>The computational cost of the dependency structure is not the only consideration here. Changing the parameterization can also change the posterior correlations among latent states, which can affect mixing. But in this case decreasing the computational cost turns out to be a good move.</p>
 </div>
 <div id="compare-mcmcs" class="section level4">
 <h4>Compare MCMCs</h4>
@@ -361,6 +375,70 @@ make_MCMC_comparison_pages(mcmcBoth, dir = 'martin_MCMC_comparison')</code></pre
 <p>It does look like the alternative version yields faster MCMC for both NIMBLE and JAGS.</p>
 </div>
 </div>
+<div id="strategies-for-customizing-mcmc-configurations" class="section level1">
+<h1>Strategies for customizing MCMC configurations</h1>
+<ul>
+<li><p>Below we will set up functions to create a variety of custom MCMC configurations.</p></li>
+<li><p>Then we will run a big comparison of all ideas.</p></li>
+</ul>
+</div>
+<div id="identify-worst-mixing-parameters-and-focus-on-them" class="section level1">
+<h1>Identify worst-mixing parameters and focus on them</h1>
+<p>We see from the <code>compareMCMCs</code> figures that <code>sigma.obs</code> and <code>sigma.proc</code> are the worst-mixing parameters. It is not uncommon for a random effects standard deviation to mix slowly.</p>
+</div>
+<div id="sample-some-nodes-on-a-log-scale" class="section level1">
+<h1>Sample some nodes on a log scale</h1>
+<div id="replace-samplers-with-rw-mh-on-a-log-scale" class="section level2">
+<h2><strong>Replace</strong> samplers with RW-MH on a log scale</h2>
+<pre class="r"><code>assignRWlogScale &lt;- function(MCMCconf, nodes) {
+    for(node in nodes) {
+        MCMCconf$removeSamplers(node)
+        MCMCconf$addSampler(target = node,
+                            type = 'RW',
+                            control = list(log = TRUE))
+    }
+    MCMCconf
+}
+## Following is needed only when generating html
+.GlobalEnv$assignRWlogScale &lt;- assignRWlogScale</code></pre>
+</div>
+</div>
+<div id="sample-some-nodes-more-often" class="section level1">
+<h1>Sample some nodes more often</h1>
+<div id="add-extra-rw-mh-samplers-on-a-log-scale" class="section level2">
+<h2>Add <strong>extra</strong> RW-MH samplers on a log scale</h2>
+<pre class="r"><code>addRWlogScale &lt;- function(MCMCconf, nodes) {
+    numSamplers &lt;- length(MCMCconf$getSamplers())
+    iHalf &lt;- ceiling(numSamplers/2)
+    for(node in nodes) {
+        MCMCconf$addSampler(target = node,
+                            type = 'RW',
+                            control = list(log = TRUE))
+    }
+    ## re-order samplers so the new ones are in the middle of the list
+    MCMCconf$setSamplers(c(1:iHalf, ## first half of original list
+    (numSamplers+1):(numSamplers+length(nodes)), ## new samplers from end of list
+    (iHalf+1):numSamplers)) ## second half of original list
+    MCMCconf
+}
+.GlobalEnv$addRWlogScale &lt;- addRWlogScale</code></pre>
+</div>
+</div>
+<div id="try-some-different-samplers" class="section level1">
+<h1>Try some different samplers</h1>
+<p>Latent states are sampled with conjugate (Gibbs) samplers. This is effective but more costly than RW-MH sampling. Let’s try using RW-MH.</p>
+<pre class="r"><code>assignRW &lt;- function(MCMCconf, model, nodes) {
+    nodes &lt;- model$expandNodeNames(nodes)
+    for(node in nodes) {
+        MCMCconf$removeSamplers(node)
+        MCMCconf$addSampler(target = node,
+                            type = 'RW')
+    }
+    MCMCconf
+}
+## Following is needed only when generating html
+.GlobalEnv$assignRW &lt;- assignRW</code></pre>
+</div>
 <div id="manual-blocking" class="section level1">
 <h1>Manual blocking</h1>
 <p>NIMBLE comes with two kinds of block samplers:</p>
@@ -368,57 +446,27 @@ make_MCMC_comparison_pages(mcmcBoth, dir = 'martin_MCMC_comparison')</code></pre
 <li>Adaptive multivariate normal random-walk block sampler: This makes multivariate normal proposals using a covariance matrix that adapts to the shape of the posterior.</li>
 <li>Automated factor slice sampler: This uses slice samplers in rotated corrdinates. This is more computationally intense but will ensure that moves are made.</li>
 </ul>
-<p>Let’s try sampling <code>sigma.obs</code> and <code>sigma.proc</code> using AFSS:</p>
-<pre class="r"><code>configureAFSSsigmas &lt;- function(Rmodel) {
-    MCMCconf &lt;- configureMCMC(Rmodel)
-    MCMCconf$removeSamplers('sigma.proc')
-    MCMCconf$removeSamplers('sigma.obs')
-    MCMCconf$addSampler(target = c('sigma.proc','sigma.obs'),
-                        type = 'AF_slice')
+<p>Let’s try blocking groups of three latent states using block RW-MH or AFSS:</p>
+<pre class="r"><code>blockStates &lt;- function(MCMCconf, Rmodel, states, type) {
+    stateNodes &lt;- Rmodel$expandNodeNames(states)
+    numStates &lt;- length(stateNodes)
+    numBlocks &lt;- ceiling(numStates/3)
+    for(i in 1:numBlocks) {
+        iStart &lt;- (3*(i-1)+1)       ## 1, 4, 7, 10 etc.
+        iEnd &lt;- min(3*i, numStates) ## 3, 6, 9, 12 etc. or max
+        blockNodes &lt;- stateNodes[iStart:iEnd]
+        MCMCconf$removeSamplers(blockNodes)
+        ## check if there is a singleton at the end
+        if(iEnd &gt; iStart) {
+            MCMCconf$addSampler(blockNodes, type = type, silent = TRUE)
+        } else {
+            MCMCconf$addSampler(blockNodes, type = 'RW') ## in case there is a singleton
+        }
+    }
     MCMCconf
 }
 
-configureRWBsigmas &lt;- function(Rmodel) {
-    MCMCconf &lt;- configureMCMC(Rmodel)
-    MCMCconf$removeSamplers('sigma.proc')
-    MCMCconf$removeSamplers('sigma.obs')
-    MCMCconf$addSampler(target = c('sigma.proc','sigma.obs'),
-                        type = 'RW_block')
-    MCMCconf
-}
-
-## Next two lines are needed only when generating html
-.GlobalEnv$configureAFSSsigmas &lt;- configureAFSSsigmas
-.GlobalEnv$configureRWBsigmas &lt;- configureRWBsigmas
-
-mcmcResultBlockSigmas &lt;- compareMCMCs(
-    list(original = list(code = martin_code_alt, inits = ourInits, data = bugs.data)),
-    niter = 50000,
-    burnin = 5000,
-    MCMCdefs = list(
-        AFSSsigmas = quote({configureAFSSsigmas(Rmodel)}),
-        RWBsigmas = quote({configureRWBsigmas(Rmodel)})
-    ),
-    MCMCs = c('AFSSsigmas', 'RWBsigmas'),
-    summary = TRUE)</code></pre>
-<pre><code>## Working on original</code></pre>
-<pre><code>## defining model...</code></pre>
-<pre><code>## Detected y as data within 'constants'.</code></pre>
-<pre><code>## Adding y as data for building model.</code></pre>
-<pre><code>## building model...</code></pre>
-<pre><code>## setting data and initial values...</code></pre>
-<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
-## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
-## model building finished.
-## Note: Assigning an RW_block sampler to nodes with very different scales can result in low MCMC efficiency.  If all nodes assigned to RW_block are not on a similar scale, we recommend providing an informed value for the &quot;propCov&quot; control list argument, or using the AFSS sampler instead.
-## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
-## compilation finished.
-## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
-## compilation finished.</code></pre>
-<pre><code>## |-------------|-------------|-------------|-------------|
-## |-------------------------------------------------------|
-## |-------------|-------------|-------------|-------------|
-## |-------------------------------------------------------|</code></pre>
+.GlobalEnv$blockStates &lt;- blockStates</code></pre>
 </div>
 <div id="automatic-blocking" class="section level1">
 <h1>Automatic blocking</h1>
@@ -429,22 +477,93 @@ mcmcResultBlockSigmas &lt;- compareMCMCs(
 </ul>
 <p>For this model, autoBlock did not help, so we’ll illustrate it later.</p>
 </div>
-<div id="sample-some-nodes-on-a-log-scale-especially-sigmas" class="section level1">
-<h1>Sample some nodes on a log scale (especially sigmas)</h1>
-</div>
-<div id="sample-some-nodes-more-often" class="section level1">
-<h1>Sample some nodes more often</h1>
-</div>
-<div id="try-different-kinds-of-samplers" class="section level1">
-<h1>Try different kinds of samplers</h1>
-<p>In this model, it may be worth trying RW samplers instead of conjugate (Gibbs) samplers.</p>
-</div>
 <div id="write-new-samplers" class="section level1">
 <h1>Write new samplers</h1>
+<p>We will learn how to do this later.</p>
 </div>
 <div id="defer-posterior-predictive-computations-until-after-mcmc" class="section level1">
 <h1>Defer posterior predictive computations until after MCMC</h1>
-<p>In this model, years 2010-2015 (<code>y[21]</code> - <code>y[26]</code>) are posterior-predictive.</p>
+<p>In this model, years 2010-2015 (<code>y[21]</code> - <code>y[26]</code>) are posterior-predictive. They do not need to be sampled during parameter estimation, although BUGS/JAGS users are accustomed to doing so.</p>
+<p>We will show later how posterior predictive sampling can be done separately from MCMC.</p>
+</div>
+<div id="putting-it-all-together-the-race-is-on" class="section level1">
+<h1>Putting it all together: The race is on</h1>
+<pre class="r"><code>MCMCdefs = list(
+    RWsigmaLogScale = quote({assignRWlogScale(configureMCMC(Rmodel),
+                                         c('sigma.proc','sigma.obs'))}),
+    RWsigmaLogScale2 = quote({addRWlogScale(assignRWlogScale(configureMCMC(Rmodel),
+                                                        c('sigma.proc','sigma.obs')),
+                                       c('sigma.proc','sigma.obs'))}),
+    RWstates = quote({assignRW(configureMCMC(Rmodel),
+                               Rmodel,
+                               'logN.est')}),
+    RWstates_RWsigmaLogScale = quote({assignRW(assignRWlogScale(configureMCMC(Rmodel),
+                                                                c('sigma.proc','sigma.obs')),
+                                               Rmodel,
+                                               'logN.est')}),
+    RWblockStates = quote({blockStates(configureMCMC(Rmodel),
+                                       Rmodel,
+                                       'logN.est',
+                                       'RW_block')}),
+    RWblockStates_RWsigmaLogScale = quote({blockStates(
+                                               assignRWlogScale(configureMCMC(Rmodel),
+                                                                c('sigma.proc','sigma.obs')),
+                                               Rmodel,
+                                               'logN.est',
+                                               'RW_block')})
+)
+
+house_martin_comparisons &lt;- compareMCMCs(
+    list(house_martin = list(code = martin_code_alt,
+                             inits = ourInits,
+                             data = bugs.data)),
+    niter = 50000,
+    burnin = 5000,
+    MCMCdefs = MCMCdefs,
+    MCMCs = c('nimble', 'jags', names(MCMCdefs)),
+    summary = TRUE)</code></pre>
+<pre><code>## Working on house_martin</code></pre>
+<pre><code>## defining model...</code></pre>
+<pre><code>## Detected y as data within 'constants'.</code></pre>
+<pre><code>## Adding y as data for building model.</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## setting data and initial values...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
+<pre><code>## Compiling model graph
+##    Resolving undeclared variables
+##    Allocating nodes
+## Graph information:
+##    Observed stochastic nodes: 20
+##    Unobserved stochastic nodes: 35
+##    Total graph size: 128
+## 
+## Initializing model</code></pre>
+<pre><code>## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
+## compilation finished.
+## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
+## compilation finished.</code></pre>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|
+## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<pre class="r"><code>make_MCMC_comparison_pages(house_martin_comparisons,
+                           dir = &quot;martin_MCMC_comparison_many&quot;,
+                           modelNames = &quot;house_martin&quot;)</code></pre>
+<p>The results are <a href="martin_MCMC_comparison_many/house_martin.html">here</a>.</p>
+<p>These methods are not very different. In more complicated models, we can see much bigger performance differences between methods. We can conclude that blocking groups of latent states did not help, while sampling standard deviations on a log scale did help.</p>
+<p>Again, this was a simple example to illustrate the process of comparing MCMC methods.</p>
 </div>
 
 

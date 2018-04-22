@@ -29,6 +29,7 @@ This model is highly conjugate.  Such rare models are where JAGS is at its best.
 This model is easily sampled, so it is not in great need of improvement, but examples with it run quickly.
 
 Agenda:
+
 1. Introduction
 2. Study the model and re-write it.
 3. Set up a variety of sampler configurations and see what works.
@@ -335,7 +336,7 @@ MCMCdefs = list(
                                                Rmodel,
                                                'logN.est',
                                                'RW_block')})
-    )
+)
 
 house_martin_comparisons <- compareMCMCs(
     list(house_martin = list(code = martin_code_alt,

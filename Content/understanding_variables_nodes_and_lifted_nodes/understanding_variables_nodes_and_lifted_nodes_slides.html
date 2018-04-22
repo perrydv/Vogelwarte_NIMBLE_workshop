@@ -1,0 +1,480 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Understanding variables, nodes, lifted nodes, and graphs</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_CHTML-full" type="text/javascript"></script>
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Understanding variables, nodes, lifted nodes, and graphs</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="outline" class="slide section level1">
+<h1>Outline</h1>
+<p>In this module, we'll learn some terms and concepts for models in NIMBLE:</p>
+<ul>
+<li>the distinction between a <em>variable</em> and a <em>node</em>;</li>
+<li>how to find variables and nodes in a model;</li>
+<li>some different types of nodes;</li>
+<li>what <em>lifted nodes</em> are;</li>
+<li>an introduction to <em>model-generic programming</em>.</li>
+</ul>
+<p>We will continue to use the pump model to illustrate concepts because it is so simple.</p>
+</div>
+<div id="pump-model" class="slide section level1">
+<h1>Pump model</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pumpCode</code></pre></div>
+<pre><code>## {
+##     for (i in 1:N) {
+##         x[i] ~ dpois(lambda[i])
+##         lambda[i] &lt;- theta[i] * t[i]
+##         theta[i] ~ dgamma(alpha, beta)
+##     }
+##     alpha ~ dexp(1)
+##     beta ~ dgamma(0.1, 1)
+## }</code></pre>
+</div>
+<div id="variables-and-nodes" class="slide section level1">
+<h1>Variables and Nodes</h1>
+<ul>
+<li>A <strong>variable</strong> is an object that contains one or more nodes.</li>
+<li>A <strong>node</strong> is an object declared in a model statement.</li>
+<li>Every node is <em>stochastic</em> (declared with <code>~</code>) or * deterministic (declared with <code>&lt;-</code>).</li>
+</ul>
+<p>Example:</p>
+<ul>
+<li><code>lambda</code> is a variable in the pump model.</li>
+<li><code>lambda[3]</code> is a node in the pump model.</li>
+</ul>
+<p>A node can be scalar or multivariate.</p>
+<p>One of the main features of the BUGS language is that a variable can contain a variety of different kinds of nodes.</p>
+<p>Example:</p>
+<ul>
+<li>We could have a variable <code>X</code> that is 10 <span class="math inline">\(\times\)</span> 10.</li>
+<li><code>X[1:10, 1]</code> could be a stochastic node following a Dirichlet distribution.</li>
+<li>Each <code>X[1, 2:5]</code>...<code>X[10, 2:5]</code> could be a vector deterministic node from some calculation.</li>
+<li>Each <code>X[1,6]</code>...<code>X[9, 10]</code> could be a scalar stochastic node following a gamma distribution.</li>
+<li><code>X[10, 6:10]</code> could be a stochastic node following a multivariate normal.</li>
+</ul>
+</div>
+<div id="accessing-values-of-variables-and-nodes" class="slide section level1">
+<h1>Accessing values of variables and nodes</h1>
+<h3 id="accessing-variables">Accessing variables</h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$lambda ## accesses the variable lambda</code></pre></div>
+<pre><code>##  [1]  9.430  1.570  6.290 12.600  0.524  3.140  0.105  0.105  0.210  1.050</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$lambda[<span class="dv">3</span>:<span class="dv">5</span>] ## accesses elements of lambda</code></pre></div>
+<pre><code>## [1]  6.290 12.600  0.524</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## which may or may not be one node or multiple nodes.</code></pre></div>
+<h3 id="accessing-nodes">Accessing nodes</h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump[[<span class="st">&#39;lambda[3]&#39;</span>]] ## accesses node lambda[3]</code></pre></div>
+<pre><code>## [1] 6.29</code></pre>
+<p>You can also assign values (<code>&lt;-</code>) to variables and nodes.</p>
+<p>Example: If you didn't provide a good choice of initial values when you created the model (via <code>inits</code> argument to <code>nimbleModel</code>), you are free to assign values to the model via its variables or nodes.</p>
+</div>
+<div id="why-does-accessing-nodes-seem-strange-in-r" class="slide section level1">
+<h1>Why does accessing nodes seem strange in R?</h1>
+<ul>
+<li><code>pump$lambda[3]</code> feels &quot;natural&quot; in R.</li>
+<li><p><code>pump[['lambda[3]']]</code> feels &quot;strange&quot; in R.</p>
+<ul>
+<li>Why? The index is in a character string!</li>
+<li><code>pump[['lambda[i]']]</code> <strong>does not work</strong>. <code>i</code> will not be evaluated</li>
+<li><code>pump$lambda[i]</code> will of course work.</li>
+</ul></li>
+</ul>
+<p>The reason for the node name system is model-generic programming.</p>
+<ul>
+<li>Sometimes a node will be <code>X[2, 3]</code> or <code>beta[4, 6, 1]</code>.</li>
+<li>These are all scalar nodes.</li>
+<li>We need a way to use nodes that does not depend on how many indices they have. Hence we use node names.</li>
+<li>We will see this more concretely later.</li>
+</ul>
+</div>
+<div id="learning-about-the-variable-and-nodes-in-your-model." class="slide section level1">
+<h1>Learning about the variable and nodes in your model.</h1>
+<p>We can see all the node names like this:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getNodeNames</span>()</code></pre></div>
+<pre><code>##  [1] &quot;alpha&quot;               &quot;beta&quot;                &quot;lifted_d1_over_beta&quot;
+##  [4] &quot;theta[1]&quot;            &quot;theta[2]&quot;            &quot;theta[3]&quot;           
+##  [7] &quot;theta[4]&quot;            &quot;theta[5]&quot;            &quot;theta[6]&quot;           
+## [10] &quot;theta[7]&quot;            &quot;theta[8]&quot;            &quot;theta[9]&quot;           
+## [13] &quot;theta[10]&quot;           &quot;lambda[1]&quot;           &quot;lambda[2]&quot;          
+## [16] &quot;lambda[3]&quot;           &quot;lambda[4]&quot;           &quot;lambda[5]&quot;          
+## [19] &quot;lambda[6]&quot;           &quot;lambda[7]&quot;           &quot;lambda[8]&quot;          
+## [22] &quot;lambda[9]&quot;           &quot;lambda[10]&quot;          &quot;x[1]&quot;               
+## [25] &quot;x[2]&quot;                &quot;x[3]&quot;                &quot;x[4]&quot;               
+## [28] &quot;x[5]&quot;                &quot;x[6]&quot;                &quot;x[7]&quot;               
+## [31] &quot;x[8]&quot;                &quot;x[9]&quot;                &quot;x[10]&quot;</code></pre>
+<p>We can see just the node names from one variable or part of a variable like this:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">expandNodeNames</span>(<span class="st">&#39;lambda&#39;</span>)</code></pre></div>
+<pre><code>##  [1] &quot;lambda[1]&quot;  &quot;lambda[2]&quot;  &quot;lambda[3]&quot;  &quot;lambda[4]&quot;  &quot;lambda[5]&quot; 
+##  [6] &quot;lambda[6]&quot;  &quot;lambda[7]&quot;  &quot;lambda[8]&quot;  &quot;lambda[9]&quot;  &quot;lambda[10]&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">expandNodeNames</span>(<span class="st">&#39;lambda[2:5]&#39;</span>)</code></pre></div>
+<pre><code>## [1] &quot;lambda[2]&quot; &quot;lambda[3]&quot; &quot;lambda[4]&quot; &quot;lambda[5]&quot;</code></pre>
+<p>We can see variable names like this:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getVarNames</span>()</code></pre></div>
+<pre><code>## [1] &quot;x&quot;                   &quot;lambda&quot;              &quot;lifted_d1_over_beta&quot;
+## [4] &quot;theta&quot;               &quot;alpha&quot;               &quot;beta&quot;</code></pre>
+<p>We can get information about a variable like this:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getVarInfo</span>(<span class="st">&#39;lambda&#39;</span>)</code></pre></div>
+<pre><code>## Reference class object of class &quot;varInfoClass&quot;
+## Field &quot;varName&quot;:
+## [1] &quot;lambda&quot;
+## Field &quot;mins&quot;:
+## [1] 1
+## Field &quot;maxs&quot;:
+## [1] 10
+## Field &quot;nDim&quot;:
+## [1] 1
+## Field &quot;anyStoch&quot;:
+## [1] FALSE
+## Field &quot;anyDynamicallyIndexed&quot;:
+## [1] FALSE</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getVarInfo</span>(<span class="st">&#39;theta&#39;</span>)</code></pre></div>
+<pre><code>## Reference class object of class &quot;varInfoClass&quot;
+## Field &quot;varName&quot;:
+## [1] &quot;theta&quot;
+## Field &quot;mins&quot;:
+## [1] 1
+## Field &quot;maxs&quot;:
+## [1] 10
+## Field &quot;nDim&quot;:
+## [1] 1
+## Field &quot;anyStoch&quot;:
+## [1] TRUE
+## Field &quot;anyDynamicallyIndexed&quot;:
+## [1] FALSE</code></pre>
+</div>
+<div id="logprob-variables" class="slide section level1">
+<h1>logProb variables</h1>
+<p>Every stochastic node automatically has an element of a &quot;logProb&quot; variable associated with it. The log probability (density) of the variable will be stored in this element when it is <em>calculated</em>.</p>
+<p>logProb variables are simply named as <code>logProb_[variable name]</code>.</p>
+<p>We sometimes call these &quot;logProb nodes&quot; out of habit, but they are not nodes in the graph.</p>
+<p>Example:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$logProb_theta ## These were all initialized with the same value</code></pre></div>
+<pre><code>##  [1] -0.1 -0.1 -0.1 -0.1 -0.1 -0.1 -0.1 -0.1 -0.1 -0.1</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$logProb_x</code></pre></div>
+<pre><code>##  [1]  -2.998011  -1.118924  -1.882686  -2.319466  -4.254550 -20.739651
+##  [7]  -2.358795  -2.358795  -9.630645 -48.447798</code></pre>
+<p>You don't generally need to use logProb variables directly. Once we start programming, you will instead use</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getLogProb</span>(<span class="st">&#39;x[3]&#39;</span>)</code></pre></div>
+<pre><code>## [1] -1.882686</code></pre>
+<p>However it is useful to understand the existence of the logProb variables.</p>
+</div>
+<div id="finding-logprob-variables" class="slide section level1">
+<h1>Finding logProb variables</h1>
+<h3 id="scalar-nodes">Scalar nodes</h3>
+<p>For scalar stochastic nodes, the logProb node is usually obvious.</p>
+<p>For <code>theta[3]</code>, the log probability value will be in <code>logProb_theta[3]</code>.</p>
+<h3 id="multivariate-nodes">Multivariate nodes</h3>
+<p>For multivariate stochastic nodes, it is not as obvious.</p>
+<p>If <code>X[3:5,  2]</code> follows a multivariate normal, its log probability value will be in <code>logProb_X[3, 2]</code>.</p>
+<p>You can find logProb variables like this:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getVarNames</span>(<span class="dt">includeLogProb =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>##  [1] &quot;x&quot;                   &quot;lambda&quot;              &quot;lifted_d1_over_beta&quot;
+##  [4] &quot;theta&quot;               &quot;alpha&quot;               &quot;beta&quot;               
+##  [7] &quot;logProb_x&quot;           &quot;logProb_theta&quot;       &quot;logProb_alpha&quot;      
+## [10] &quot;logProb_beta&quot;</code></pre>
+</div>
+<div id="topological-ordering-of-nodes-and-why-it-matters" class="slide section level1">
+<h1>Topological ordering of nodes and why it matters</h1>
+<p>Suppose we want to change the value of <code>theta[3]</code> and update all relevant parts of the graph.</p>
+<p>(The meaning of &quot;relevant&quot; depends on our purpose of changing <code>theta[3]</code>. In this case imagine we are making a Metropolis-Hastings (MCMC) proposal and need to calculate its acceptance probability.)</p>
+<p>The nodes that need to be updated are shown in red.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## function drawGraph is defined in the R file for this module
+<span class="kw">drawGraph</span>(pump, <span class="dt">colorBy =</span> pump$<span class="kw">getDependencies</span>(<span class="st">&#39;theta[3]&#39;</span>))</code></pre></div>
+<div class="figure">
+<img src="figure/deps-graph-1.png" />
+
+</div>
+<p>Note that <strong>order matters</strong>. If we calculated the log probability density of <code>x[3]</code> <em>before</em> calculating <code>lambda[3]</code>, then <code>x[3]</code> would use the <em>old</em> value of <code>lambda[3]</code>. That would be a mistake.</p>
+<p>A valid order for calculations is called <strong>topologically sorted</strong>. Most of NIMBLE's model-querying functions will return nodes in tologically sorted order.</p>
+</div>
+<div id="types-of-nodes." class="slide section level1">
+<h1>Types of nodes.</h1>
+<p>Some definitions:</p>
+<ul>
+<li>LHS = &quot;left-hand-side&quot; of a BUGS declaration</li>
+<li>RHS = &quot;right-hand-side&quot; of a BUGS declaration</li>
+</ul>
+<p>Every node falls into one of following categories <strong>based on how it appears in BUGS code</strong>:</p>
+<ul>
+<li>deterministic: declared on LHS with <code>&lt;-</code></li>
+<li>stochastic: declared on LHS with <code>~</code></li>
+<li>RHSonly: appears only on RHS of one or more declarations, never on the LHS.</li>
+</ul>
+<p>Every node <em>also</em> falls into one of the following categories <strong>based on where it is in the graph</strong>:</p>
+<ul>
+<li>top: Has no stochastic nodes &quot;above&quot; it in the graph.</li>
+<li>latent: Has stochastic nodes &quot;above&quot; and &quot;below&quot; it in the graph.</li>
+<li>end: Has no stochastic nodes &quot;below&quot; it in the graph.</li>
+</ul>
+<p>Sometimes people use ancestray terms:</p>
+<ul>
+<li>&quot;above&quot; = &quot;parent&quot; or &quot;ancestor&quot;</li>
+<li>&quot;below&quot; = &quot;child&quot; or &quot;descendent&quot;</li>
+</ul>
+<p>Once a model is created, stochastic nodes can be labeled as <strong>data</strong>.</p>
+<ul>
+<li>Multiple copies of the same model can be created from the same BUGS code, with possibly different data nodes.</li>
+<li>The data label is used by programs to decide what to do.</li>
+<li>Values of data nodes can be changed.</li>
+<li>Data labels should not be changed after an algorithm like MCMC has been built for a model.</li>
+</ul>
+</div>
+<div id="finding-out-about-nodes" class="slide section level1">
+<h1>Finding out about nodes</h1>
+<h2 id="stochastic-deterministic-andor-data">Stochastic, deterministic, and/or data</h2>
+<p>Here is a graph color-coded by whether nodes are stochastic, deterministic, and/or labeled as data:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">drawGraph</span>(pump, <span class="dt">colorBy =</span> <span class="st">&quot;stochDetermData&quot;</span>)</code></pre></div>
+<div class="figure">
+<img src="figure/stoch-determ-data-fig-1.png" />
+
+</div>
+<p>You can select groups of nodes by these types:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## deterministic nodes
+pump$<span class="kw">getNodeNames</span>(<span class="dt">determOnly =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>##  [1] &quot;lifted_d1_over_beta&quot; &quot;lambda[1]&quot;           &quot;lambda[2]&quot;          
+##  [4] &quot;lambda[3]&quot;           &quot;lambda[4]&quot;           &quot;lambda[5]&quot;          
+##  [7] &quot;lambda[6]&quot;           &quot;lambda[7]&quot;           &quot;lambda[8]&quot;          
+## [10] &quot;lambda[9]&quot;           &quot;lambda[10]&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## all stochastic nodes
+pump$<span class="kw">getNodeNames</span>(<span class="dt">stochOnly =</span> <span class="ot">TRUE</span>, <span class="dt">includeData =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>##  [1] &quot;alpha&quot;     &quot;beta&quot;      &quot;theta[1]&quot;  &quot;theta[2]&quot;  &quot;theta[3]&quot; 
+##  [6] &quot;theta[4]&quot;  &quot;theta[5]&quot;  &quot;theta[6]&quot;  &quot;theta[7]&quot;  &quot;theta[8]&quot; 
+## [11] &quot;theta[9]&quot;  &quot;theta[10]&quot; &quot;x[1]&quot;      &quot;x[2]&quot;      &quot;x[3]&quot;     
+## [16] &quot;x[4]&quot;      &quot;x[5]&quot;      &quot;x[6]&quot;      &quot;x[7]&quot;      &quot;x[8]&quot;     
+## [21] &quot;x[9]&quot;      &quot;x[10]&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## non-data stochastic nodes
+pump$<span class="kw">getNodeNames</span>(<span class="dt">stochOnly =</span> <span class="ot">TRUE</span>, <span class="dt">includeData =</span> <span class="ot">FALSE</span>)</code></pre></div>
+<pre><code>##  [1] &quot;alpha&quot;     &quot;beta&quot;      &quot;theta[1]&quot;  &quot;theta[2]&quot;  &quot;theta[3]&quot; 
+##  [6] &quot;theta[4]&quot;  &quot;theta[5]&quot;  &quot;theta[6]&quot;  &quot;theta[7]&quot;  &quot;theta[8]&quot; 
+## [11] &quot;theta[9]&quot;  &quot;theta[10]&quot;</code></pre>
+<h2 id="top-latend-and-end">top, latend, and end</h2>
+<p>Here is a graph color-coded by whether nodes are top, latent, or end nodes.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">drawGraph</span>(pump, <span class="st">&#39;topLatentEnd&#39;</span>)</code></pre></div>
+<div class="figure">
+<img src="figure/top-latent-end-fig-1.png" />
+
+</div>
+<p>You can also select groups of nodes by these types:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getNodeNames</span>(<span class="dt">topOnly =</span> <span class="ot">TRUE</span>)   <span class="co">#salmon</span></code></pre></div>
+<pre><code>## [1] &quot;alpha&quot; &quot;beta&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getNodeNames</span>(<span class="dt">latentOnly =</span> <span class="ot">TRUE</span>)  <span class="co">#cyan</span></code></pre></div>
+<pre><code>##  [1] &quot;lifted_d1_over_beta&quot; &quot;theta[1]&quot;            &quot;theta[2]&quot;           
+##  [4] &quot;theta[3]&quot;            &quot;theta[4]&quot;            &quot;theta[5]&quot;           
+##  [7] &quot;theta[6]&quot;            &quot;theta[7]&quot;            &quot;theta[8]&quot;           
+## [10] &quot;theta[9]&quot;            &quot;theta[10]&quot;           &quot;lambda[1]&quot;          
+## [13] &quot;lambda[2]&quot;           &quot;lambda[3]&quot;           &quot;lambda[4]&quot;          
+## [16] &quot;lambda[5]&quot;           &quot;lambda[6]&quot;           &quot;lambda[7]&quot;          
+## [19] &quot;lambda[8]&quot;           &quot;lambda[9]&quot;           &quot;lambda[10]&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getNodeNames</span>(<span class="dt">endOnly =</span> <span class="ot">TRUE</span>)    <span class="co">#plum</span></code></pre></div>
+<pre><code>##  [1] &quot;x[1]&quot;  &quot;x[2]&quot;  &quot;x[3]&quot;  &quot;x[4]&quot;  &quot;x[5]&quot;  &quot;x[6]&quot;  &quot;x[7]&quot;  &quot;x[8]&quot; 
+##  [9] &quot;x[9]&quot;  &quot;x[10]&quot;</code></pre>
+<h2 id="combined-categories">Combined categories</h2>
+<p>Say you want to know what the stochastic, latent nodes are.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getNodeNames</span>(<span class="dt">stochOnly =</span> <span class="ot">TRUE</span>, <span class="dt">latentOnly =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>##  [1] &quot;theta[1]&quot;  &quot;theta[2]&quot;  &quot;theta[3]&quot;  &quot;theta[4]&quot;  &quot;theta[5]&quot; 
+##  [6] &quot;theta[6]&quot;  &quot;theta[7]&quot;  &quot;theta[8]&quot;  &quot;theta[9]&quot;  &quot;theta[10]&quot;</code></pre>
+<h2 id="rhsonly-nodes">RHSonly nodes</h2>
+<p>You also can query the model for RHSonly nodes:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getNodeNames</span>(<span class="dt">includeRHSonly =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>##  [1] &quot;alpha&quot;               &quot;beta&quot;                &quot;lifted_d1_over_beta&quot;
+##  [4] &quot;theta[1]&quot;            &quot;theta[2]&quot;            &quot;theta[3]&quot;           
+##  [7] &quot;theta[4]&quot;            &quot;theta[5]&quot;            &quot;theta[6]&quot;           
+## [10] &quot;theta[7]&quot;            &quot;theta[8]&quot;            &quot;theta[9]&quot;           
+## [13] &quot;theta[10]&quot;           &quot;lambda[1]&quot;           &quot;lambda[2]&quot;          
+## [16] &quot;lambda[3]&quot;           &quot;lambda[4]&quot;           &quot;lambda[5]&quot;          
+## [19] &quot;lambda[6]&quot;           &quot;lambda[7]&quot;           &quot;lambda[8]&quot;          
+## [22] &quot;lambda[9]&quot;           &quot;lambda[10]&quot;          &quot;x[1]&quot;               
+## [25] &quot;x[2]&quot;                &quot;x[3]&quot;                &quot;x[4]&quot;               
+## [28] &quot;x[5]&quot;                &quot;x[6]&quot;                &quot;x[7]&quot;               
+## [31] &quot;x[8]&quot;                &quot;x[9]&quot;                &quot;x[10]&quot;</code></pre>
+<p>In this case, there are no RHSonly nodes. We might think <code>t</code> nodes are RHSonly, but in fact since <code>t</code> was provided in <code>constants</code>, it is no longer considered to be a variable in the model. Its values have been <strong>permanently</strong> substituted where needed.</p>
+<p>We could modify how we create the model as follows to see <code>t</code> nodes appear as RHSonly.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## Move &quot;t&quot; from constants to data
+pumpData2 &lt;-<span class="st"> </span><span class="kw">c</span>(pumpData, pumpConsts[<span class="st">&#39;t&#39;</span>])
+pumpConsts2 &lt;-<span class="st"> </span>pumpConsts[<span class="st">&#39;N&#39;</span>]
+pump2 &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(
+    pumpCode,
+    <span class="dt">data =</span> pumpData2,
+    <span class="dt">constants =</span> pumpConsts2
+)</code></pre></div>
+<pre><code>## defining model...</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## setting data and initial values...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump2$<span class="kw">getNodeNames</span>()</code></pre></div>
+<pre><code>##  [1] &quot;alpha&quot;               &quot;beta&quot;                &quot;lifted_d1_over_beta&quot;
+##  [4] &quot;theta[1]&quot;            &quot;theta[2]&quot;            &quot;theta[3]&quot;           
+##  [7] &quot;theta[4]&quot;            &quot;theta[5]&quot;            &quot;theta[6]&quot;           
+## [10] &quot;theta[7]&quot;            &quot;theta[8]&quot;            &quot;theta[9]&quot;           
+## [13] &quot;theta[10]&quot;           &quot;lambda[1]&quot;           &quot;lambda[2]&quot;          
+## [16] &quot;lambda[3]&quot;           &quot;lambda[4]&quot;           &quot;lambda[5]&quot;          
+## [19] &quot;lambda[6]&quot;           &quot;lambda[7]&quot;           &quot;lambda[8]&quot;          
+## [22] &quot;lambda[9]&quot;           &quot;lambda[10]&quot;          &quot;x[1]&quot;               
+## [25] &quot;x[2]&quot;                &quot;x[3]&quot;                &quot;x[4]&quot;               
+## [28] &quot;x[5]&quot;                &quot;x[6]&quot;                &quot;x[7]&quot;               
+## [31] &quot;x[8]&quot;                &quot;x[9]&quot;                &quot;x[10]&quot;</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump2$<span class="kw">getNodeNames</span>(<span class="dt">includeRHSonly =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>##  [1] &quot;alpha&quot;               &quot;beta&quot;                &quot;t[1]&quot;               
+##  [4] &quot;t[2]&quot;                &quot;t[3]&quot;                &quot;t[4]&quot;               
+##  [7] &quot;t[5]&quot;                &quot;t[6]&quot;                &quot;t[7]&quot;               
+## [10] &quot;t[8]&quot;                &quot;t[9]&quot;                &quot;t[10]&quot;              
+## [13] &quot;lifted_d1_over_beta&quot; &quot;theta[1]&quot;            &quot;theta[2]&quot;           
+## [16] &quot;theta[3]&quot;            &quot;theta[4]&quot;            &quot;theta[5]&quot;           
+## [19] &quot;theta[6]&quot;            &quot;theta[7]&quot;            &quot;theta[8]&quot;           
+## [22] &quot;theta[9]&quot;            &quot;theta[10]&quot;           &quot;lambda[1]&quot;          
+## [25] &quot;lambda[2]&quot;           &quot;lambda[3]&quot;           &quot;lambda[4]&quot;          
+## [28] &quot;lambda[5]&quot;           &quot;lambda[6]&quot;           &quot;lambda[7]&quot;          
+## [31] &quot;lambda[8]&quot;           &quot;lambda[9]&quot;           &quot;lambda[10]&quot;         
+## [34] &quot;x[1]&quot;                &quot;x[2]&quot;                &quot;x[3]&quot;               
+## [37] &quot;x[4]&quot;                &quot;x[5]&quot;                &quot;x[6]&quot;               
+## [40] &quot;x[7]&quot;                &quot;x[8]&quot;                &quot;x[9]&quot;               
+## [43] &quot;x[10]&quot;</code></pre>
+<p>Now we see that <code>t</code> nodes have appeared when we ask to include <code>RHSonly</code> nodes.</p>
+</div>
+<div id="topologically-sorting-nodes" class="slide section level1">
+<h1>Topologically sorting nodes</h1>
+<p>If for some reason you have a collection of node names and need them topologically sorted:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">topologicallySortNodes</span>(<span class="kw">c</span>(<span class="st">&#39;x[1:3]&#39;</span>,<span class="st">&#39;beta&#39;</span>,<span class="st">&#39;theta[1:3]&#39;</span>))</code></pre></div>
+<pre><code>## [1] &quot;beta&quot;     &quot;theta[1]&quot; &quot;theta[2]&quot; &quot;theta[3]&quot; &quot;x[1]&quot;     &quot;x[2]&quot;    
+## [7] &quot;x[3]&quot;</code></pre>
+<p>Often there is more than one valid topological sorting, but NIMBLE chooses one that is usually intuitive and uses it for your model.</p>
+</div>
+<div id="inspecting-the-model-querying-graph-dependencies" class="slide section level1">
+<h1>Inspecting the model: Querying graph dependencies</h1>
+<p>There are several kinds of dependencies that may be needed in different circumstances.</p>
+<ul>
+<li><em>Stochastic dependencies</em> (called the <em>Markov blanket</em> in computer science) terminate at stochastic nodes (inclusive). These are the dependencies needed for many kinds of MCMC samplers.</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getDependencies</span>(<span class="st">&#39;theta[3]&#39;</span>)</code></pre></div>
+<pre><code>## [1] &quot;theta[3]&quot;  &quot;lambda[3]&quot; &quot;x[3]&quot;</code></pre>
+<ul>
+<li><em>Deterministic dependencies</em> terminate at stochastic nodes but omit the stochastic nodes. These can be useful for implementing a particle filter.</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pump$<span class="kw">getDependencies</span>(<span class="st">&#39;theta[3]&#39;</span>, <span class="dt">determOnly =</span> <span class="ot">TRUE</span>)</code></pre></div>
+<pre><code>## [1] &quot;lambda[3]&quot;</code></pre>
+<div class="figure">
+<img src="figure/unnamed-chunk-6-1.png" />
+
+</div>
+<ul>
+<li>Other ways to control the dependency query can be found by</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">args</span>(pump$getDependencies)</code></pre></div>
+<pre><code>## function (nodes, omit = character(), self = TRUE, determOnly = FALSE, 
+##     stochOnly = FALSE, includeData = TRUE, dataOnly = FALSE, 
+##     includeRHSonly = FALSE, downstream = FALSE, returnType = &quot;names&quot;, 
+##     returnScalarComponents = FALSE) 
+## NULL</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## or help(modelBaseClass)</code></pre></div>
+</div>
+<div id="the-importance-of-querying-a-model-lifted-nodes" class="slide section level1">
+<h1>The importance of querying a model: lifted nodes</h1>
+<p><strong>You should never assume you know what nodes are in a model simply because you wrote the BUGS code.</strong></p>
+<p>NIMBLE implements some features by inserting its own nodes. These are called <strong>lifted nodes</strong>.</p>
+<p>Let's look at the two main ways this happens:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">m1 &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(
+    <span class="kw">nimbleCode</span>({
+        tau ~<span class="st"> </span><span class="kw">dunif</span>(<span class="dv">0</span>, <span class="dv">100</span>)
+        x ~<span class="st"> </span><span class="kw">dnorm</span>(<span class="dv">0</span>, tau) <span class="co">#by default, tau is a precision</span>
+    }))</code></pre></div>
+<pre><code>## defining model...</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot</span>(m1$<span class="kw">getGraph</span>())</code></pre></div>
+<div class="figure">
+<img src="figure/unnamed-chunk-8-1.png" />
+
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">m1$<span class="kw">getNodeNames</span>()</code></pre></div>
+<pre><code>## [1] &quot;tau&quot;                          &quot;lifted_d1_over_sqrt_oPtau_cP&quot;
+## [3] &quot;x&quot;</code></pre>
+<p>The node <code>lifted_d1_over_sqrt_oPtau_cP</code> has been inserted between <code>tau</code> and <code>x</code>. The resulting model would equivalently have been created by this BUGS code:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">nimbleCode</span>({
+    tau ~<span class="st"> </span><span class="kw">dunif</span>(<span class="dv">0</span>, <span class="dv">100</span>)
+    lifted_d1_over_sqrt_oPtau_cP &lt;-<span class="st"> </span><span class="dv">1</span>/<span class="kw">sqrt</span>(tau)
+    x ~<span class="st"> </span><span class="kw">dnorm</span>(<span class="dv">0</span>, <span class="dt">sd =</span> lifted_d1_over_sqrt_oPtau_cP) <span class="co">#by default, tau is a precision</span>
+})<span class="er">)</span></code></pre></div>
+<p>NIMBLE has <em>lifted</em> the calculation of standard deviation from precision so that it is part of the model's graph. Therefore <em>you will make a mistake if you assume that the dependencies of <code>tau</code> include only <code>x</code></em>:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">m1$<span class="kw">calculate</span>(<span class="kw">c</span>(<span class="st">&#39;tau&#39;</span>,<span class="st">&#39;x&#39;</span>)) ## Wrong: the lifted node is being neglected</code></pre></div>
+<p>The correct way to do this is with model-generic programming:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">m1$<span class="kw">calculate</span>( m1$<span class="kw">getDependencies</span>(<span class="st">&#39;tau&#39;</span>) )</code></pre></div>
+<p>The second common situation that creates lifted nodes is:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">m2 &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(
+    <span class="kw">nimbleCode</span>({
+        a ~<span class="st"> </span><span class="kw">dnorm</span>(<span class="dv">0</span>, <span class="dv">1</span>)
+        b ~<span class="st"> </span><span class="kw">dnorm</span>(a +<span class="st"> </span><span class="dv">1</span>, <span class="dv">1</span>)
+    }))</code></pre></div>
+<pre><code>## defining model...</code></pre>
+<pre><code>## building model...</code></pre>
+<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
+## checking model sizes and dimensions... This model is not fully initialized. This is not an error. To see which variables are not initialized, use model$initializeInfo(). For more information on model initialization, see help(modelInitialization).
+## model building finished.</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot</span>(m2$<span class="kw">getGraph</span>())</code></pre></div>
+<div class="figure">
+<img src="figure/unnamed-chunk-12-1.png" />
+
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">m2$<span class="kw">getNodeNames</span>()</code></pre></div>
+<pre><code>## [1] &quot;a&quot;               &quot;lifted_a_plus_1&quot; &quot;b&quot;</code></pre>
+<p>In this case, NIMBLE lifted the expression <code>a+1</code> and created a node for it. Again the correct way to program is to query a model to learn about its nodes. Do not assume you know what the nodes are.</p>
+</div>
+</body>
+</html>

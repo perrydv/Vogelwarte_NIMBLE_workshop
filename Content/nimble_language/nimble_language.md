@@ -173,15 +173,15 @@ CnumericDemo()
 ## 5.56268e-309
 ## d
 ## -1.28823e-231
-## -1.49457e-154
+##      -2.00389
 ##  1.48331e+151
 ##   7.08923e-71
 ##   7.11583e-71
-##   7.06077e-71
-##  3.19228e-110
+##   4.62851e-66
+##  4.19154e-110
 ##  2.11311e+214
 ##  4.71456e+257
-##  6.95875e-309
+##  6.95551e-309
 ```
 
 ```
@@ -378,3 +378,4 @@ Example:
 
 # `nimbleList` #
 
+`nimbleList`s provide a data structure system that can move between the R and compiled NIMBLE worlds.  We will not introduce it right now.

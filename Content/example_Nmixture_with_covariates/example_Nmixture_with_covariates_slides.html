@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Example: simulated N-mixture model with covariates</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Example: simulated N-mixture model with covariates</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="nmixture-with-covariates-example" class="slide section level1">
+<h1>Nmixture with covariates example</h1>
+<ul>
+<li><p>Simulated example from Applied Hierarchical Modeling in Ecology, Vol. 1 (Kéry and Royle), Chapter 6.4.</p></li>
+<li><p>3 sampling occasions at each of 100 sites split among 3 habitat types.</p></li>
+<li><p>Detection covariate is <code>Xwind</code>. Abundance covariate is <code>XvegHt</code>.</p></li>
+<li><p>What needs to be sampled in this model?</p>
+<ul>
+<li><code>alpha0[1]</code> ... <code>alpha0[3]</code>, detection intercepts at 3 sampling times</li>
+<li><code>alpha1[1]</code> ... <code>alpha1[3]</code>, detection slopes at 3 sampling times</li>
+<li><code>beta0[1]</code> ... <code>beta0[3]</code>, abundance intercepts at 3 sampling times</li>
+<li><code>beta1[1]</code> ... <code>beta1[3]</code>, abundance slopes at 3 sampling times</li>
+<li><code>N[1]</code> ... <code>N[100]</code>, latent population size at 100 sites</li>
+</ul></li>
+<li><p>There are some posterior predictive nodes.</p></li>
+</ul>
+</div>
+<div id="look-at-the-original-bugsjags-code" class="slide section level1">
+<h1>Look at the original BUGS/JAGS code</h1>
+<p>The code for JAGS is <a href="../examples_code/Nmixture_with_covariates/model2.txt">here</a>.</p>
+</div>
+</body>
+</html>

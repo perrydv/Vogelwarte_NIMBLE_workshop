@@ -17,9 +17,10 @@ output:
 - Supports `if-then-else` and `do-while`
 - Supports object creation with modified versions of `numeric()`, `matrix()` and `array()`
 - `nimbleList` supports somewhat list-like data structures
-- **Pass-by-reference semantics** in compiled nimbleFunctions.  This
-  is fundamentally different (and faster) than R's pass-by-value
-  (copy) semantics.
+- **Pass-by-reference semantics** in compiled nimbleFunctions.  This is fundamentally different (and faster) than R's pass-by-value  (copy) semantics.
+- Supports calling separately compiled code.
+- Supports calling R functions from within compiled code (with
+  overhead of R evaluation).
 
 # Type declarations
 
@@ -72,7 +73,7 @@ tempdir()
 ```
 
 ```
-## [1] "/var/folders/v7/tzbf84253jg2_l2pm304l2cr0000gn/T//RtmpXR8EXi"
+## [1] "/var/folders/v7/tzbf84253jg2_l2pm304l2cr0000gn/T//RtmpcgvEZg"
 ```
 
 We can inspect the C++ header file,

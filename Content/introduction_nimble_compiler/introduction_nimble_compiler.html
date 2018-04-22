@@ -161,6 +161,8 @@ $(document).ready(function () {
 <li>Supports object creation with modified versions of <code>numeric()</code>, <code>matrix()</code> and <code>array()</code></li>
 <li><code>nimbleList</code> supports somewhat list-like data structures</li>
 <li><strong>Pass-by-reference semantics</strong> in compiled nimbleFunctions. This is fundamentally different (and faster) than R’s pass-by-value (copy) semantics.</li>
+<li>Supports calling separately compiled code.</li>
+<li>Supports calling R functions from within compiled code (with overhead of R evaluation).</li>
 </ul>
 </div>
 <div id="type-declarations" class="section level1">
@@ -203,7 +205,7 @@ CtimesScalarVector &lt;- compileNimble(timesScalarVector, dirName = '.')</code><
 <pre class="r"><code>## By default, C++ is written in the temporary directory that R
 ## creates for every session.  Its location can be found by
 tempdir()</code></pre>
-<pre><code>## [1] &quot;/var/folders/v7/tzbf84253jg2_l2pm304l2cr0000gn/T//RtmpXR8EXi&quot;</code></pre>
+<pre><code>## [1] &quot;/var/folders/v7/tzbf84253jg2_l2pm304l2cr0000gn/T//RtmpcgvEZg&quot;</code></pre>
 <p>We can inspect the C++ header file, <a href="P_1_timesScalarVector.h" class="uri">P_1_timesScalarVector.h</a>, and the C++ implementation file, <a href="P_1_timesScalarVector.cpp" class="uri">P_1_timesScalarVector.cpp</a>.</p>
 </div>
 <div id="upcoming-features" class="section level1">

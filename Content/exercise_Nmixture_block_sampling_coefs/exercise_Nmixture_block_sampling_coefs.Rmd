@@ -17,34 +17,14 @@ if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
 cur_dir <- getwd()
 setwd(file.path(nimble_course_dir,
                  'examples_code',
-                 'Nmixture_with_covariates'))
-source("Nmixture_with_covariates.R")
+                 'extra'))
+source("model1.R")
 setwd(cur_dir)
 ```
 
 # Refresher on the Nmixture with covariates example
 
-- Simulated example from AHM Chapter 6.4.
-
-- 3 sampling occasions at each of 100 sites split among 3 habitat types.
-
-- Detection covariate is `Xwind`.  Abundance covariate is `XvegHt`.
-
-- What needs to be sampled in this model?
-
-    - `alpha0[1]` ... `alpha0[3]`, detection intercepts at 3 sampling times
-    - `alpha1[1]` ... `alpha1[3]`, detection slopes at 3 sampling times
-    - `beta0[1]` ... `beta0[3]`, abundance intercepts at 3 sampling times
-    - `beta1[1]` ... `beta1[3]`, abundance slopes at 3 sampling times
-    - `N[1]` ... `N[100]`, latent population size at 100 sites
-
-- There are some posterior predictive nodes.
-
-# Look at the BUGS code
-
-```{r BUGS-code}
-Section6p4_code
-```
+The Nmixture with covariates example is summarized [here](../example_Nmixture_with_covariates/example_Nmixture_with_covariates_slides.html)
 
 # What are default samplers?
 

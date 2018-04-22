@@ -1,0 +1,176 @@
+---
+title: "Introduction to customizing MCMC in NIMBLE"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+library(igraph)
+if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
+    nimble_course_dir <- file.path(getwd(),'..')
+source(file.path(nimble_course_dir,
+                 'examples_code',
+                 'pump',
+                 'pump_model.R'))
+source(file.path(nimble_course_dir,
+                 'examples_code',
+                 'extra',
+                 'model1.R'))
+```
+
+# How does Markov chain Monte Carlo work?
+
+I assume you have some familiarity with the concepts of sampling from Bayesian posterior distribution.  But how does MCMC work?
+
+MCMC is more like a set of general rules than a single algorithm.
+
+There are lots of **samplers** that satisfy the rules.
+
+Statisticians are regularly inventing new samplers and proving that they too satisfy the rules.
+
+Other packages provide limited flexibility to control the details of how MCMC will be done for a particular model.
+
+NIMBLE allows control over which samplers wil be used, and it allows you to write new samplers.
+
+# Some terminology: sampler vs. kernel.
+
+A **sampler** updates the value of one or more nodes in a model.
+
+- Sometimes an "update" results in the same value it started with.
+
+A **kernel** is a set of samplers that together are valid for sampling from the full posterior.
+
+(Speaking casually, people might say "sampler" to describe a "kernel", but we find it useful to maintain the distinction.)
+
+# A sampler configuration in NIMBLE
+
+NIMBLE's first step towards creating an MCMC is to create a **configuration**.
+
+A configuration is simply a list of what kind of sampler will be used for which parts of a model.
+
+We will use two examples:
+
+- the pump model (*for the last time*!);
+- the Nmixture model with covariates.
+
+## Pump sampler assignments
+
+```{r pumpMCMCconf}
+pumpMCMCconf <- configureMCMC(pump)
+pumpMCMCconf$printSamplers()
+```
+
+We can access the sampler configuration objects to dig deeper
+```{r sampler-assignment-objects}
+pump_samplers<- pumpMCMCconf$getSamplers()
+pump_samplers
+## look at the first one
+alpha_sampler <- pump_samplers[[1]]
+class(alpha_sampler)
+ls(alpha_sampler)
+alpha_sampler$target
+```
+
+## N-mixture sampler assignments
+
+```{r NmixMCMCconf}
+NmixMCMCconf <- configureMCMC(Nmix_model)
+NmixMCMCconf$printSamplers()
+```
+
+# Customizing a sampler configuration
+
+Let's say you want to remove the random-walk sampler on `alpha` in the pump model and replace it with a slice sampler.
+
+```{r customize-pump-samplers}
+## First check on samplers for node alpha
+pumpMCMCconf$printSamplers("alpha")
+## Remove the old sampler
+pumpMCMCconf$removeSamplers("alpha")
+## Add a new sampler
+pumpMCMCconf$addSampler(target = "alpha", type = "slice")
+pumpMCMCconf$printSamplers()
+```
+
+# More customizing of a sampler configuration #
+
+We can also:
+
+- have more than sampler for a node;
+- re-order the samplers.
+
+Sometimes this matters to MCMC efficiency.  Let's say we want another sampler on `alpha` because it needs more mixing attention, and we want them to be separated in the order:
+
+```{r customize-pump-samplers-2}
+pumpMCMCconf$addSampler(target = "alpha", type = "slice")
+pumpMCMCconf$printSamplers()
+pumpMCMCconf$setSamplers(c(1:6, 12, 7:11, 13))
+pumpMCMCconf$printSamplers()
+```
+
+# Customizing samplers programmatically
+
+Say you want to replace the sampler for every `theta` node with a random-walk Metropolis-Hastings sampler.
+
+```{r replate-theta-samplers}
+## First let's start with a fresh default configuration
+pumpMCMCconf <- configureMCMC(pump)
+## Next let's make a function that replaces samplers for
+## any nodes requested.
+assignRW <- function(MCMCconf, model, nodes) {
+    nodes <- model$expandNodeNames(nodes)
+    for(node in nodes) {
+        MCMCconf$removeSamplers(node)
+        MCMCconf$addSampler(target = node, type = "RW")
+    }
+    MCMCconf
+}
+## Then let's use the function for all theta nodes.
+assignRW(pumpMCMCconf, pump, 'theta')
+pumpMCMCconf$printSamplers()
+```
+
+Note that an MCMC configuration object is a reference class object, so it is passed by reference and modifications happen in-place.
+
+# Populating an empty or partial MCMC configuration
+
+Another strategy to take complete control is to make an empty configuration or a partial configuration by providing only those nodes you want configured.
+
+```{r empty-config}
+## configure sampler only for node alpha
+pumpMCMCconf_empty <- configureMCMC(pump, nodes = 'alpha')
+pumpMCMCconf_empty$printSamplers()
+## We could then use addSampler to populate the rest of what we want.
+```
+
+
+# Kinds of samplers
+
+The kinds of samplers that bundled with NIMBLE are listed by `help(samplers)` or in the source code [here]( ).
+
+Each sampler has `control` options we haven't discussed.
+
+These include:
+
+- Gibbs (aka conjugate). 
+- binary
+- adaptive random-walk Metropolis-Hastings
+- block adaptive random-walk Metropolis-Hastings
+- `RW_llFunction` A random-walk Metropolis-Hastings that calls any log-likelihood function you provide.
+- slice
+- elliptical slice sampler
+- automated factor slice sampler
+- cross-level sampler
+- random-walk for particle MCMC
+- block random-walk for particle MCMC
+- random-walk multinomial sampler
+- random-walk Dirichlet sampler
+- CAR (conditional autoregression model) normal sampler
+- CAR proper sampler
+- posterior predictive sampler

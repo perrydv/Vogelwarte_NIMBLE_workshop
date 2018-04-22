@@ -35,20 +35,11 @@ setwd(cur_dir)
 
 # Orchids (ladyslipper) example
 
-- From Bayesian Population Analysis Using WinBUGS (K&#233;ry and Schaub)
-- Orchids modeled in states "vegetative", "flowering", "dormant", "dead"
-- Observations: "seen vegetative", "seen flowering", "not seen".
-- k = 11 annual observation periods 
-- n = 250 unique plants
-- n = 236 plants seen before the last observation time
-
-This is a simple multi-state model because the state when not seen is unknown.
-
-Obviously multi-state models can be more complicated than this.
+This example is described [here](../example_multi_state_CR_orchids/example_multi_state_CR_orchids_slides.html)
 
 # BUGS code 
 
-This code is from BPA:
+Let's get the BUGS code here for easy reference.
 
 ```{r basic-code}
 orchids_code

@@ -87,7 +87,7 @@ Perry de Valpine, UC Berkeley
 x &lt;-<span class="st"> </span><span class="kw">rnorm</span>(<span class="dv">10000</span>)
 y &lt;-<span class="st"> </span><span class="kw">timesScalarVector</span>(a, x)
 <span class="kw">head</span>(y)</code></pre></div>
-<pre><code>## [1]  0.7396786  0.6442932  0.8527116 -1.0271043 -0.6793384  0.1447999</code></pre>
+<pre><code>## [1] -0.83179881  3.01421313 -0.19144481 -1.20869860 -0.05204928 -0.59229055</code></pre>
 <h3 id="compiled-execution">Compiled execution</h3>
 <p>It can also be compiled and run the same way.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">CtimesScalarVector &lt;-<span class="st"> </span><span class="kw">compileNimble</span>(timesScalarVector)</code></pre></div>
@@ -95,7 +95,7 @@ y &lt;-<span class="st"> </span><span class="kw">timesScalarVector</span>(a, x)
 <pre><code>## compilation finished.</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">Cy &lt;-<span class="st"> </span><span class="kw">CtimesScalarVector</span>(a, x)
 <span class="kw">head</span>(Cy)</code></pre></div>
-<pre><code>## [1]  0.7396786  0.6442932  0.8527116 -1.0271043 -0.6793384  0.1447999</code></pre>
+<pre><code>## [1] -0.83179881  3.01421313 -0.19144481 -1.20869860 -0.05204928 -0.59229055</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">identical</span>(y, Cy)</code></pre></div>
 <pre><code>## [1] TRUE</code></pre>
 <p>In this case there is no measurable speed improvement because both versions run in &quot;0&quot; time because it is so simple.</p>

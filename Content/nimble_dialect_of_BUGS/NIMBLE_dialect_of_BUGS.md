@@ -14,8 +14,8 @@ output:
 
 * Most distributions and functions are supported
 
-    - For distributions, see [User Manual Section 5.2.4](../NimbleUserManual.pdf#page=38)
-    - For function, see  [User Manual Section 5.2.5](../NimbleUserManual.pdf#page=43)
+    - For distributions, see [User Manual Section 5.2.4](../NimbleUserManual.pdf#page=39)
+    - For function, see  [User Manual Section 5.2.5](../NimbleUserManual.pdf#page=44)
 	
 * Most syntax is supported
 
@@ -121,7 +121,7 @@ pump$x
 ```
 
 ```
-##  [1]  7  0  8 18  0  2  0  0  0  3
+##  [1]  3  0  5 17  0  3  0  0  1  2
 ```
 
 - NIMBLE will usually disambiguate data when it is provided as constants.

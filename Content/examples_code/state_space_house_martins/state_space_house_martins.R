@@ -47,5 +47,5 @@ inits <- function(){
 }
 
 ssm <- nimbleModel(ssmCode,
-                            constants = bugs.data, 
-                            inits = inits())
+                   constants = bugs.data, 
+                   inits = inits())

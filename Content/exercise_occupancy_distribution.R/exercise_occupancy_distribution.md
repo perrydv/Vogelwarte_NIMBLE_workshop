@@ -237,3 +237,4 @@ Results are [here](occupancy_basic_comparison/Section10p4.html)
 
 Rewrite this model to use a `dOccupancy` distribution for the vector `y[i, 1:J]` of observations from each size `i`.  This should allow you to remove the `z[i]` nodes from the model.  You will also need to write `dOccupancy` itself.
 
+Bonus: Can you also rewrite the model to simplify the graph involving `p` and `phi`?
