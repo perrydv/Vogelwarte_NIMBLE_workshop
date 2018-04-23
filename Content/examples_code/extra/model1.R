@@ -123,3 +123,30 @@ params <- c("alpha0", "alpha1", "beta0", "beta1", "Nocc", "Ntotal", "Nhab", "N.c
 Nmix_model <- nimbleModel(Section6p4_code,
                           constants = win.data,
                           inits = inits())
+
+## Nmix_mcmc <- buildMCMC(Nmix_model) ## Use monitors to say what states to record. Default will be top-level nodes.
+## compiled <- compileNimble(Nmix_model, Nmix_mcmc)
+## compiled$Nmix_mcmc$run(2000)
+## ##option 1
+## samples <- as.matrix(compiled$Nmix_mcmc$mvSamples)
+
+## library(mcmcplots)
+## mcmcplot(samples)
+## head(samples)
+
+## Nmix_model$getNodeNames(topOnly = TRUE)
+
+## ## option 2
+## samples2 <- runMCMC(compiled$Nmix_mcmc, niter = 2000)
+## head(samples2)
+
+## ## run more samples
+## compiled$Nmix_mcmc$run(niter = 1000, reset = FALSE)
+## samples2b <- as.matrix(compiled$Nmix_mcmc$mvSamples)
+## dim(samples2b)
+
+## ## option 3
+## samples3 <- nimbleMCMC(Section6p4_code,
+##                        constants = win.data,
+##                        inits = inits)
+## head(samples3)

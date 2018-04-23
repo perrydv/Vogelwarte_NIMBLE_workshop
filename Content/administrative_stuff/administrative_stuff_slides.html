@@ -83,7 +83,7 @@ Perry de Valpine, UC Berkeley
 <div id="github-site" class="slide section level1">
 <h1>GitHub site</h1>
 <ul>
-<li><p>Workshope materials are on <a href="https://github.com/nimble-dev/nimble-outreach">NIMBLE's Github outreach repository</a></p></li>
+<li><p>Workshop materials are on our <a href="https://github.com/perrydv/Vogelwarte_NIMBLE_workshop">GitHub repository for this workshop</a></p></li>
 <li><p>We may update materials during the course of the workshop.</p></li>
 </ul>
 <h2 id="using-github-to-get-the-documents">Using Github to get the documents</h2>
@@ -91,8 +91,8 @@ Perry de Valpine, UC Berkeley
 <h3 id="within-rstudio">Within RStudio</h3>
 <p>Within RStudio go to File-&gt;New Project-&gt;Version Control-&gt;Git and enter:</p>
 <ul>
-<li>&quot;Repository URL&quot;: https://github.com/nimble-dev/nimble-outreach</li>
-<li>&quot;Project Directory Name&quot;: nimble-outreach (or something else of your choosing)</li>
+<li>&quot;Repository URL&quot;: https://github.com/perrydv/Vogelwarte_NIMBLE_workshop</li>
+<li>&quot;Project Directory Name&quot;: nimble-workshop (or something else of your choosing)</li>
 <li>&quot;Directory&quot;: ~/Desktop (or somewhere of your choosing)</li>
 </ul>
 <p>Then to update from the repository to get any changes we've made, you can select (from within RStudio): Tools-&gt;Version Control-&gt;Pull Branches</p>
@@ -100,11 +100,11 @@ Perry de Valpine, UC Berkeley
 <p>Be warned that you probably do not want to make your own notes or changes to the files we are providing. Because if you do, and you then do a &quot;Git Pull&quot; to update the materials, you'll have to deal with the conflict between your local version and our version. You probably will want to make a personal copy of such files in another directory or by making copies of files with new names.</p>
 <h3 id="from-the-github-site-directly">From the GitHub site directly:</h3>
 <ul>
-<li>Go to <a href="https://github.com/nimble-dev/nimble-outreach" class="uri">https://github.com/nimble-dev/nimble-outreach</a> and click on the 'Clone or Download' button in the right side of the window and then on 'Download ZIP'.</li>
+<li>Go to <a href="https://github.com/perrydv/Vogelwarte_NIMBLE_workshop" class="uri">https://github.com/perrydv/Vogelwarte_NIMBLE_workshop</a> and click on the 'Clone or Download' button in the right side of the window and then on 'Download ZIP'.</li>
 </ul>
 <h3 id="from-a-github-desktop-app">From a GitHub desktop app:</h3>
 <ul>
-<li>Go to <a href="https://github.com/nimble-dev/nimble-outreach" class="uri">https://github.com/nimble-dev/nimble-outreach</a> and click on the 'Clone or Download' button in the right side of the window and then on 'Open in Desktop'.</li>
+<li>Go to <a href="https://github.com/perrydv/Vogelwarte_NIMBLE_workshop" class="uri">https://github.com/perrydv/Vogelwarte_NIMBLE_workshop</a> and click on the 'Clone or Download' button in the right side of the window and then on 'Open in Desktop'.</li>
 </ul>
 <h3 id="from-a-terminal-window">From a terminal window</h3>
 <p>Run the following commands:</p>
@@ -117,23 +117,38 @@ Perry de Valpine, UC Berkeley
 <li><code>cd /directory/where/you/put/the/repository/nimble-outreach</code></li>
 <li><code>git pull</code></li>
 </ul>
-<h2 id="etherpad-for-quick-sharing">Etherpad for quick sharing</h2>
+</div>
+<div id="etherpad-for-quick-sharing" class="slide section level1">
+<h1>Etherpad for quick sharing</h1>
 <ul>
 <li>There is an online shared document at <a href="https://pad.systemli.org/p/nimble_vogelwarte" class="uri">https://pad.systemli.org/p/nimble_vogelwarte</a>.</li>
 <li>We can use this for rapid code sharing.</li>
 <li>This will disappear after 30 days of inactivity.</li>
 </ul>
-<h2 id="organization-of-workshop-modules">Organization of workshop modules</h2>
+</div>
+<div id="organization-of-workshop-modules" class="slide section level1">
+<h1>Organization of workshop modules</h1>
 <ul>
 <li>Each module is in a separate directory. Example: <a href="../introduction_to_nimble">Introduction to NIMBLE</a></li>
 <li><p>In each directory you will see:</p>
 <ul>
 <li>Rmarkdown source file. You do not need to use this. Example: <a href="../introduction_to_nimble/introduction_to_nimble.Rmd">introduction_to_nimble.Rmd</a></li>
-<li>Slides (..._slides.html). Example: <a href="../introduction_to_nimble/introduction_to_nimble_slides.html">introduction_to_nimble_slides.Rmd</a></li>
-<li>The slides content as a single html (.html). Example: <a href="../introduction_to_nimble/introduction_to_nimble.html">introduction_to_nimble.Rmd</a></li>
+<li>Slides (..._slides.html). Example: <a href="../introduction_to_nimble/introduction_to_nimble_slides.html">introduction_to_nimble_slides.html</a></li>
+<li>The slides content as a single html (.html). Example: <a href="../introduction_to_nimble/introduction_to_nimble.html">introduction_to_nimble.html</a></li>
 <li>The R code extracted to a separate file. Example: <a href="../introduction_to_nimble/introduction_to_nimble.R">introduction_to_nimble.R</a></li>
 </ul></li>
 <li><p>There will be one or more master files to navigate among the modules.</p></li>
+</ul>
+</div>
+<div id="organization-of-examples" class="slide section level1">
+<h1>Organization of examples:</h1>
+<ul>
+<li>Code and data for examples are in subdirectories of the <a href="../examples_code">examples_code</a> directory.</li>
+<li><p>When needed, code and data will be <code>source()ed</code> from a module, so you shouldn't need to go into <code>examples_code</code>.</p>
+<ul>
+<li>This assumes that when you run code from a module, your working directory is the module's directory. If that is not the case, you can set <code>nimble_course_dir</code> to be the main directory with all of the module directories. This will be used to find code files for examples.</li>
+</ul></li>
+<li><p>There is a module to introduce each example.</p></li>
 </ul>
 </div>
 </body>

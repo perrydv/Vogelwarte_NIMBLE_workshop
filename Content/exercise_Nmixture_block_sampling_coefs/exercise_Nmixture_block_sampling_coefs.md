@@ -14,6 +14,8 @@ output:
 
 The Nmixture with covariates example is summarized [here](../example_Nmixture_with_covariates/example_Nmixture_with_covariates_slides.html)
 
+The code to set up the example is [here](../examples_code/extra/model1.R).
+
 # What are default samplers?
 
 

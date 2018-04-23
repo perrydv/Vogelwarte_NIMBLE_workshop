@@ -29,7 +29,7 @@ install_github("nimble-dev/nimble", ref = "devel", subdir = "packages/nimble")
 
 # GitHub site
 
-- Workshop materials are on [NIMBLE's Github outreach repository](https://github.com/nimble-dev/nimble-outreach)
+- Workshop materials are on our [GitHub repository for this workshop](https://github.com/perrydv/Vogelwarte_NIMBLE_workshop)
 
 - We may update materials during the course of the workshop.
 
@@ -41,8 +41,8 @@ To download the files from Github, you can do the following:
 
 Within RStudio go to File->New Project->Version Control->Git and enter:
 
-- "Repository URL": https://github.com/nimble-dev/nimble-outreach
-- "Project Directory Name": nimble-outreach (or something else of your choosing)
+- "Repository URL": https://github.com/perrydv/Vogelwarte_NIMBLE_workshop
+- "Project Directory Name": nimble-workshop (or something else of your choosing)
 - "Directory": ~/Desktop (or somewhere of your choosing)
 
 Then to update from the repository to get any changes we've made, you can select (from within RStudio):
@@ -55,11 +55,11 @@ Be warned that you probably do not want to make your own notes or changes to the
 
 ### From the GitHub site directly:
 
-- Go to [https://github.com/nimble-dev/nimble-outreach](https://github.com/nimble-dev/nimble-outreach) and click on the 'Clone or Download' button in the right side of the window and then on 'Download ZIP'.
+- Go to [https://github.com/perrydv/Vogelwarte_NIMBLE_workshop](https://github.com/perrydv/Vogelwarte_NIMBLE_workshop) and click on the 'Clone or Download' button in the right side of the window and then on 'Download ZIP'.
 
 ### From a GitHub desktop app:
 
-- Go to [https://github.com/nimble-dev/nimble-outreach](https://github.com/nimble-dev/nimble-outreach) and click on the 'Clone or Download' button in the right side of the window and then on 'Open in Desktop'.
+- Go to [https://github.com/perrydv/Vogelwarte_NIMBLE_workshop](https://github.com/perrydv/Vogelwarte_NIMBLE_workshop) and click on the 'Clone or Download' button in the right side of the window and then on 'Open in Desktop'.
 
 ### From a terminal window
 
