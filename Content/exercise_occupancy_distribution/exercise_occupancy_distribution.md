@@ -20,6 +20,8 @@ We take our example from Applied Hierarchical Modeling in Ecology, Vol I (K&#233
 - `vegHt` = vegetation height: logistic effect on occupancy probability
 - `wind` = wind speed: logistic effect on detection probability
 
+The code files are [occupancy_with_covariates_setup.R](../examples_code/occupancy_with_covariates/occupancy_with_covariates_setup.R) and [occupancy_with_covariates.R](../examples_code/occupancy_with_covariates/occupancy_with_covariates.R)
+
 # Occupancy probabilities
 
 Define `X[i, t]` = 1 if the species was detected as site `i` at time `t`, 0 otherwise.
@@ -157,73 +159,7 @@ occupancy_basic_comparison <- compareMCMCs(
   burnin = nb,
   niter = ni
 )
-```
 
-```
-## Working on model1
-```
-
-```
-## defining model...
-```
-
-```
-## Detected y as data within 'constants'.
-```
-
-```
-## Adding y as data for building model.
-```
-
-```
-## building model...
-```
-
-```
-## setting data and initial values...
-```
-
-```
-## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
-## checking model sizes and dimensions...
-## model building finished.
-```
-
-```
-## Warning in rjags::jags.model(file = modelFileName, data =
-## constantsAndData, : Unused variable "XvegHt" in data
-```
-
-```
-## Warning in rjags::jags.model(file = modelFileName, data =
-## constantsAndData, : Unused variable "Xwind" in data
-```
-
-```
-## Compiling model graph
-##    Resolving undeclared variables
-##    Allocating nodes
-## Graph information:
-##    Observed stochastic nodes: 300
-##    Unobserved stochastic nodes: 104
-##    Total graph size: 2317
-## 
-## Initializing model
-```
-
-```
-## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
-## compilation finished.
-## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
-## compilation finished.
-```
-
-```
-## |-------------|-------------|-------------|-------------|
-## |-------------------------------------------------------|
-```
-
-```r
 make_MCMC_comparison_pages(occupancy_basic_comparison,
                            modelNames = "Section10p4",
                            dir = "occupancy_basic_comparison")

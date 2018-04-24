@@ -165,6 +165,7 @@ $(document).ready(function () {
 <li><code>vegHt</code> = vegetation height: logistic effect on occupancy probability</li>
 <li><code>wind</code> = wind speed: logistic effect on detection probability</li>
 </ul>
+<p>The code files are <a href="../examples_code/occupancy_with_covariates/occupancy_with_covariates_setup.R">occupancy_with_covariates_setup.R</a> and <a href="../examples_code/occupancy_with_covariates/occupancy_with_covariates.R">occupancy_with_covariates.R</a></p>
 </div>
 <div id="occupancy-probabilities" class="section level1">
 <h1>Occupancy probabilities</h1>
@@ -277,36 +278,9 @@ occupancy_basic_comparison &lt;- compareMCMCs(
   summary = FALSE,
   burnin = nb,
   niter = ni
-)</code></pre>
-<pre><code>## Working on model1</code></pre>
-<pre><code>## defining model...</code></pre>
-<pre><code>## Detected y as data within 'constants'.</code></pre>
-<pre><code>## Adding y as data for building model.</code></pre>
-<pre><code>## building model...</code></pre>
-<pre><code>## setting data and initial values...</code></pre>
-<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
-## checking model sizes and dimensions...
-## model building finished.</code></pre>
-<pre><code>## Warning in rjags::jags.model(file = modelFileName, data =
-## constantsAndData, : Unused variable &quot;XvegHt&quot; in data</code></pre>
-<pre><code>## Warning in rjags::jags.model(file = modelFileName, data =
-## constantsAndData, : Unused variable &quot;Xwind&quot; in data</code></pre>
-<pre><code>## Compiling model graph
-##    Resolving undeclared variables
-##    Allocating nodes
-## Graph information:
-##    Observed stochastic nodes: 300
-##    Unobserved stochastic nodes: 104
-##    Total graph size: 2317
-## 
-## Initializing model</code></pre>
-<pre><code>## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
-## compilation finished.
-## compiling... this may take a minute. Use 'showCompilerOutput = TRUE' to see C++ compiler details.
-## compilation finished.</code></pre>
-<pre><code>## |-------------|-------------|-------------|-------------|
-## |-------------------------------------------------------|</code></pre>
-<pre class="r"><code>make_MCMC_comparison_pages(occupancy_basic_comparison,
+)
+
+make_MCMC_comparison_pages(occupancy_basic_comparison,
                            modelNames = &quot;Section10p4&quot;,
                            dir = &quot;occupancy_basic_comparison&quot;)
 

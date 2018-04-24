@@ -69,6 +69,7 @@ Perry de Valpine, UC Berkeley
 <li><code>vegHt</code> = vegetation height: logistic effect on occupancy probability</li>
 <li><code>wind</code> = wind speed: logistic effect on detection probability</li>
 </ul>
+<p>The code files are <a href="../examples_code/occupancy_with_covariates/occupancy_with_covariates_setup.R">occupancy_with_covariates_setup.R</a> and <a href="../examples_code/occupancy_with_covariates/occupancy_with_covariates.R">occupancy_with_covariates.R</a></p>
 </div>
 <div id="occupancy-probabilities" class="slide section level1">
 <h1>Occupancy probabilities</h1>
@@ -180,36 +181,9 @@ occupancy_basic_comparison &lt;-<span class="st"> </span><span class="kw">compar
   <span class="dt">summary =</span> <span class="ot">FALSE</span>,
   <span class="dt">burnin =</span> nb,
   <span class="dt">niter =</span> ni
-)</code></pre></div>
-<pre><code>## Working on model1</code></pre>
-<pre><code>## defining model...</code></pre>
-<pre><code>## Detected y as data within &#39;constants&#39;.</code></pre>
-<pre><code>## Adding y as data for building model.</code></pre>
-<pre><code>## building model...</code></pre>
-<pre><code>## setting data and initial values...</code></pre>
-<pre><code>## running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... 
-## checking model sizes and dimensions...
-## model building finished.</code></pre>
-<pre><code>## Warning in rjags::jags.model(file = modelFileName, data =
-## constantsAndData, : Unused variable &quot;XvegHt&quot; in data</code></pre>
-<pre><code>## Warning in rjags::jags.model(file = modelFileName, data =
-## constantsAndData, : Unused variable &quot;Xwind&quot; in data</code></pre>
-<pre><code>## Compiling model graph
-##    Resolving undeclared variables
-##    Allocating nodes
-## Graph information:
-##    Observed stochastic nodes: 300
-##    Unobserved stochastic nodes: 104
-##    Total graph size: 2317
-## 
-## Initializing model</code></pre>
-<pre><code>## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
-## compilation finished.
-## compiling... this may take a minute. Use &#39;showCompilerOutput = TRUE&#39; to see C++ compiler details.
-## compilation finished.</code></pre>
-<pre><code>## |-------------|-------------|-------------|-------------|
-## |-------------------------------------------------------|</code></pre>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">make_MCMC_comparison_pages</span>(occupancy_basic_comparison,
+)
+
+<span class="kw">make_MCMC_comparison_pages</span>(occupancy_basic_comparison,
                            <span class="dt">modelNames =</span> <span class="st">&quot;Section10p4&quot;</span>,
                            <span class="dt">dir =</span> <span class="st">&quot;occupancy_basic_comparison&quot;</span>)
 

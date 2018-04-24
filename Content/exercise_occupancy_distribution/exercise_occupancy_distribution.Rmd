@@ -25,6 +25,8 @@ We take our example from Applied Hierarchical Modeling in Ecology, Vol I (K&#233
 - `vegHt` = vegetation height: logistic effect on occupancy probability
 - `wind` = wind speed: logistic effect on detection probability
 
+The code files are [occupancy_with_covariates_setup.R](../examples_code/occupancy_with_covariates/occupancy_with_covariates_setup.R) and [occupancy_with_covariates.R](../examples_code/occupancy_with_covariates/occupancy_with_covariates.R)
+
 # Occupancy probabilities
 
 Define `X[i, t]` = 1 if the species was detected as site `i` at time `t`, 0 otherwise.
@@ -69,7 +71,7 @@ Section10p4_noDerived_code
 
 # Basic MCMC comparison
 
-```{r basic-MCMC}
+```{r basic-MCMC, eval = FALSE}
 params_of_interest <- c("alpha0", "alpha1", "beta0", "beta1")
 ## N.occ would be of interest, but we'll need to get that after
 ## MCMC in the next version, so we skip it here too.
