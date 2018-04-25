@@ -118,39 +118,42 @@ colnames(samples)
 
 ```r
 ## Pick a few trace plots
-plot(samples[,'N[1, 1]']) ## yuck
+plot(samples[-c(1:1000),'N[1, 1]']) ## yuck
 ```
 
 ![plot of chunk study-mcmc-results](figure/study-mcmc-results-1.png)
 
 ```r
-plot(samples[,'N[1, 2]']) ## much better
+plot(samples[-c(1:1000),'N[1, 2]']) ## much better
 ```
 
 ![plot of chunk study-mcmc-results](figure/study-mcmc-results-2.png)
 
 ```r
-plot(samples[,'mean.p']) ## looks pretty good
+plot(samples[-c(1:1000),'mean.p']) ## looks pretty good
 ```
 
 ![plot of chunk study-mcmc-results](figure/study-mcmc-results-3.png)
 
 ```r
 ## look at some pairs, dropped burnin = 500
-pairs(samples[-(1:500), 1:8], pch = '.')
+pairs(samples[-(1:1000), 1:8], pch = '.')
 ```
 
 ![plot of chunk study-mcmc-results](figure/study-mcmc-results-4.png)
 
 ```r
-pairs(samples[-(1:500), 9:16], pch = '.')
+## We see correlations in juvenile-adult pairs at eaach time,
+## especially strongly for time 1.
+## We also see time 1 posteriors being very wide.
+pairs(samples[-(1:1000), 9:16], pch = '.')
 ```
 
 ![plot of chunk study-mcmc-results](figure/study-mcmc-results-5.png)
 
 ```r
 ## skip some
-pairs(samples[-(1:500), 21:28], pch = '.') ## some parameters mixing poorly!
+pairs(samples[-(1:1000), 21:28], pch = '.') 
 ```
 
 ![plot of chunk study-mcmc-results](figure/study-mcmc-results-6.png)
@@ -163,36 +166,35 @@ effectiveSize(samples)
 
 ```
 ##    N[1, 1]    N[2, 1]    N[1, 2]    N[2, 2]    N[1, 3]    N[2, 3] 
-##   9.619708   4.156681 108.227309  93.336616 111.248926  68.794176 
+## 17.0678441 16.8566969  3.2846448 17.6352600  2.7649846  5.2328953 
 ##    N[1, 4]    N[2, 4]    N[1, 5]    N[2, 5]    N[1, 6]    N[2, 6] 
-##  77.797537  64.652178  87.453276 119.710995  61.155843  52.277386 
+##  4.7475262  2.7783582  2.4620278  1.8009302  2.2877635  2.5076020 
 ##    N[1, 7]    N[2, 7]    N[1, 8]    N[2, 8]    N[1, 9]    N[2, 9] 
-##  79.237180  55.712567  85.348799  81.725101  50.235958  41.768137 
+##  4.7407177  2.4708027  8.6328149  2.3632472  3.8312088  2.7329334 
 ##   N[1, 10]   N[2, 10]     mean.f     mean.p    mean.sa    mean.sj 
-##  55.752390  83.491075 206.146941 385.111906  34.075145   1.660035 
+## 15.5867265  2.7627569 13.7671062  3.5433377  2.2858880 21.2959889 
 ##    sigma.f  sigma.obs   sigma.sa   sigma.sj 
-##  66.152794  35.822687  57.008339   7.233599
+##  6.5227091  0.9860026 81.1035165  1.3553628
 ```
 
 ```r
-## We see horrible mixing for mean.sj and mean.f, and bad mixing for sigma.f
+## We see that the initial states mix poorly.
+## Among parameters, mean.sj mixes worst.
 ## Is mean.sj correlated with anything?
 cor(samples)[,'mean.sj']
 ```
 
 ```
-##      N[1, 1]      N[2, 1]      N[1, 2]      N[2, 2]      N[1, 3] 
-## -0.792894916  0.797307746  0.051840939 -0.078317999  0.198153590 
-##      N[2, 3]      N[1, 4]      N[2, 4]      N[1, 5]      N[2, 5] 
-## -0.045514890  0.044336231 -0.076913497 -0.173884154  0.138358766 
-##      N[1, 6]      N[2, 6]      N[1, 7]      N[2, 7]      N[1, 8] 
-##  0.270299129 -0.226191521  0.038866010 -0.042709582  0.046789581 
-##      N[2, 8]      N[1, 9]      N[2, 9]     N[1, 10]     N[2, 10] 
-##  0.007659393  0.061857881  0.053933646  0.270864320 -0.264214878 
-##       mean.f       mean.p      mean.sa      mean.sj      sigma.f 
-##  0.086699562  0.008435381 -0.108622295  1.000000000 -0.196124623 
-##    sigma.obs     sigma.sa     sigma.sj 
-## -0.058595844 -0.150258487 -0.824192970
+##    N[1, 1]    N[2, 1]    N[1, 2]    N[2, 2]    N[1, 3]    N[2, 3] 
+##  0.3713637  0.3480569  0.6041287 -0.3598760  0.6635807 -0.6491668 
+##    N[1, 4]    N[2, 4]    N[1, 5]    N[2, 5]    N[1, 6]    N[2, 6] 
+##  0.5510992  0.6670114  0.6860561  0.6632817  0.6880651  0.6878134 
+##    N[1, 7]    N[2, 7]    N[1, 8]    N[2, 8]    N[1, 9]    N[2, 9] 
+##  0.5642647  0.6880717 -0.4884143  0.6886545  0.5808932  0.6858250 
+##   N[1, 10]   N[2, 10]     mean.f     mean.p    mean.sa    mean.sj 
+## -0.3929155  0.6794861 -0.1364120 -0.7358980  0.6580362  1.0000000 
+##    sigma.f  sigma.obs   sigma.sa   sigma.sj 
+##  0.6569663  0.6172779  0.3092983  0.6695764
 ```
 
 We see `mean.sj` is highly correlated with `mean.f`.
@@ -215,7 +217,7 @@ sampler_JuvAdult <- nimbleFunction(
         adaptive      <- if(!is.null(control$adaptive))      control$adaptive      else TRUE
         adaptInterval <- if(!is.null(control$adaptInterval)) control$adaptInterval else 200
         scale         <- if(!is.null(control$scale))         control$scale         else 1
-        constantSum   <- if(!is.null(control$constantSum))   as.integer(control$constantSum)   else 1L        
+        adultMultiplier   <- if(!is.null(control$constantSum))   as.numeric(control$constantSum)   else as.numeric(1)
         calcNodes <- model$getDependencies(target)
         ##
         targetJuv <- target[1]
@@ -233,7 +235,7 @@ sampler_JuvAdult <- nimbleFunction(
         propLogScale <- 0
         propDiff <- round(rnorm(1, mean = 0, sd = scale))
         model[[targetJuv]] <<- model[[targetJuv]] + propDiff
-        model[[targetAdult]] <<- model[[targetAdult]] - constantSum * propDiff
+        model[[targetAdult]] <<- model[[targetAdult]] + adultMultiplier * propDiff
         logMHR <- calculateDiff(model, calcNodes)
         jump <- decide(logMHR)
         if(jump) nimCopy(from = model, to = mvSaved, row = 1, nodes = calcNodes, logProb = TRUE)
@@ -272,10 +274,11 @@ configureMCMC_IPM <- function(model) {
     for(i in seq(1, length(Nnodes), by = 2)) {
         JuvAdultPair <- Nnodes[i:(i+1)]## e.g. c('N[1, 1]', 'N[2, 1]')
         mcmcConf$addSampler(JuvAdultPair,
-                            type = sampler_JuvAdult)
+                            type = sampler_JuvAdult,
+                            control = list(adultMultiplier = 1))
         mcmcConf$addSampler(JuvAdultPair,
                             type = sampler_JuvAdult,
-                            control = list(constantSum = FALSE))
+                            control = list(adultMultiplier = -1))
     }
     mcmcConf
 }
@@ -284,21 +287,7 @@ configureMCMC_IPM <- function(model) {
 # Let's compare performance
 
 ```r
-configureMCMC_IPM <- function(model) {
-    mcmcConf <- configureMCMC(model)
-    mcmcConf$removeSamplers('N')
-    Nnodes <- model$expandNodeNames('N')
-    for(i in seq(1, length(Nnodes), by = 2)) {
-        JuvAdultPair <- Nnodes[i:(i+1)]## e.g. c('N[1, 1]', 'N[2, 1]')
-        mcmcConf$addSampler(JuvAdultPair,
-                            type = sampler_JuvAdult)
-        mcmcConf$addSampler(JuvAdultPair,
-                            type = sampler_JuvAdult,
-                            control = list(constantSum = FALSE))
-    }
-    mcmcConf
-}
-
+nimbleOptions(verbose = FALSE)
 ipm_comparison <- compareMCMCs(
     list(code = ipm_code,
          inits = initsVals,
@@ -319,4 +308,4 @@ make_MCMC_comparison_pages(ipm_comparison,
 ##browseURL(file.path("ipm_comparison","woodshrike.html"))
 ```
 
-Results are [here](ipm_comparisons/woodshrike.html)
+Results are [here](ipm_comparison/woodshrike.html)
