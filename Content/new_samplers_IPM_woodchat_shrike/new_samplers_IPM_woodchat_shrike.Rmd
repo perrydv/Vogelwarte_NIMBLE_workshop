@@ -66,18 +66,22 @@ colnames(samples)
 ## Study results
 ```{r study-mcmc-results}
 ## Pick a few trace plots
-plot(samples[,'N[1, 1]']) ## yuck
-plot(samples[,'N[1, 2]']) ## much better
-plot(samples[,'mean.p']) ## looks pretty good
+plot(samples[-c(1:1000),'N[1, 1]']) ## yuck
+plot(samples[-c(1:1000),'N[1, 2]']) ## much better
+plot(samples[-c(1:1000),'mean.p']) ## looks pretty good
 ## look at some pairs, dropped burnin = 500
-pairs(samples[-(1:500), 1:8], pch = '.')
-pairs(samples[-(1:500), 9:16], pch = '.')
+pairs(samples[-(1:1000), 1:8], pch = '.')
+## We see correlations in juvenile-adult pairs at eaach time,
+## especially strongly for time 1.
+## We also see time 1 posteriors being very wide.
+pairs(samples[-(1:1000), 9:16], pch = '.')
 ## skip some
-pairs(samples[-(1:500), 21:28], pch = '.') ## some parameters mixing poorly!
+pairs(samples[-(1:1000), 21:28], pch = '.') 
 ## Look at ESS:
 library(coda)
 effectiveSize(samples)
-## We see horrible mixing for mean.sj and mean.f, and bad mixing for sigma.f
+## We see that the initial states mix poorly.
+## Among parameters, mean.sj mixes worst.
 ## Is mean.sj correlated with anything?
 cor(samples)[,'mean.sj']
 ```
@@ -101,7 +105,7 @@ sampler_JuvAdult <- nimbleFunction(
         adaptive      <- if(!is.null(control$adaptive))      control$adaptive      else TRUE
         adaptInterval <- if(!is.null(control$adaptInterval)) control$adaptInterval else 200
         scale         <- if(!is.null(control$scale))         control$scale         else 1
-        constantSum   <- if(!is.null(control$constantSum))   as.integer(control$constantSum)   else 1L        
+        adultMultiplier   <- if(!is.null(control$constantSum))   as.numeric(control$constantSum)   else as.numeric(1)
         calcNodes <- model$getDependencies(target)
         ##
         targetJuv <- target[1]
@@ -119,7 +123,7 @@ sampler_JuvAdult <- nimbleFunction(
         propLogScale <- 0
         propDiff <- round(rnorm(1, mean = 0, sd = scale))
         model[[targetJuv]] <<- model[[targetJuv]] + propDiff
-        model[[targetAdult]] <<- model[[targetAdult]] - constantSum * propDiff
+        model[[targetAdult]] <<- model[[targetAdult]] + adultMultiplier * propDiff
         logMHR <- calculateDiff(model, calcNodes)
         jump <- decide(logMHR)
         if(jump) nimCopy(from = model, to = mvSaved, row = 1, nodes = calcNodes, logProb = TRUE)
@@ -158,32 +162,20 @@ configureMCMC_IPM <- function(model) {
     for(i in seq(1, length(Nnodes), by = 2)) {
         JuvAdultPair <- Nnodes[i:(i+1)]## e.g. c('N[1, 1]', 'N[2, 1]')
         mcmcConf$addSampler(JuvAdultPair,
-                            type = sampler_JuvAdult)
+                            type = sampler_JuvAdult,
+                            control = list(adultMultiplier = 1))
         mcmcConf$addSampler(JuvAdultPair,
                             type = sampler_JuvAdult,
-                            control = list(constantSum = FALSE))
+                            control = list(adultMultiplier = -1))
     }
     mcmcConf
 }
+
 ```
 
 # Let's compare performance
 ```{r compare-performance, eval = FALSE}
-configureMCMC_IPM <- function(model) {
-    mcmcConf <- configureMCMC(model)
-    mcmcConf$removeSamplers('N')
-    Nnodes <- model$expandNodeNames('N')
-    for(i in seq(1, length(Nnodes), by = 2)) {
-        JuvAdultPair <- Nnodes[i:(i+1)]## e.g. c('N[1, 1]', 'N[2, 1]')
-        mcmcConf$addSampler(JuvAdultPair,
-                            type = sampler_JuvAdult)
-        mcmcConf$addSampler(JuvAdultPair,
-                            type = sampler_JuvAdult,
-                            control = list(constantSum = FALSE))
-    }
-    mcmcConf
-}
-
+nimbleOptions(verbose = FALSE)
 ipm_comparison <- compareMCMCs(
     list(code = ipm_code,
          inits = initsVals,
@@ -204,4 +196,4 @@ make_MCMC_comparison_pages(ipm_comparison,
 ##browseURL(file.path("ipm_comparison","woodshrike.html"))
 ```
 
-Results are [here](ipm_comparisons/woodshrike.html)
+Results are [here](ipm_comparison/woodshrike.html)

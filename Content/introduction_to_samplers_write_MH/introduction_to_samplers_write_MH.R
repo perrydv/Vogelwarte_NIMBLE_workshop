@@ -46,6 +46,7 @@ our_RWMH <- nimbleFunction(
 ## ----use-our-sampler-----------------------------------------------------
 MCMCconf2 <- configureMCMC(simpleModel, nodes = NULL)
 MCMCconf2$addSampler(target = "silly", type = our_RWMH, control = list(scale = 2))
+## type can be the nimbleFunction generator or its quoted name
 MCMC2 <- buildMCMC(MCMCconf2)
 
 ## ----run-our-sampler-----------------------------------------------------
