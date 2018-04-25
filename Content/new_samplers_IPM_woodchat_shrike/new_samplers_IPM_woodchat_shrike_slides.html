@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Writing custom samplers for an integrated population model: woodchat shrike</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Writing custom samplers for an integrated population model: woodchat shrike</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="example-woodchat-shrike" class="slide section level1">
+<h1>Example: Woodchat Shrike</h1>
+<p>Thanks to Michael Schaub for this example. (Where is it from?)</p>
+<p>Michael's summary:</p>
+<h2 id="available-data">Available data:</h2>
+<ul>
+<li>marray: capture-recapture data in the marray format. It's a 3D array, the third dimension being the age (juvenile vs. adult)</li>
+<li>count: population counts in each year</li>
+<li>productivity data: vector J is the number of fledglings per year and B is the annual number of surveyed broods which give raise to the number of fledglings.</li>
+</ul>
+<h2 id="some-features-of-the-model">Some features of the model:</h2>
+<ul>
+<li>based on the life history of a passerine (2 age classes for survival, age at first reproduction = 1 year)</li>
+<li>includes demographic and environmental stochasticity (i.e temporal random effects on all demographic rates)</li>
+</ul>
+<h2 id="look-at-the-data">Look at the data</h2>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">bugs.data$marr.a</code></pre></div>
+<pre><code>##       [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+##  [1,]   30    2    0    1    0    0    0    0    0    34
+##  [2,]    0   15    6    0    2    0    0    0    0    29
+##  [3,]    0    0   23    4    0    0    0    0    0    13
+##  [4,]    0    0    0   17    0    1    0    0    0    34
+##  [5,]    0    0    0    0   21    4    0    0    0    31
+##  [6,]    0    0    0    0    0   19    1    1    0    25
+##  [7,]    0    0    0    0    0    0   18    3    1    33
+##  [8,]    0    0    0    0    0    0    0   10    5    27
+##  [9,]    0    0    0    0    0    0    0    0   14    25</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">bugs.data$marr.j</code></pre></div>
+<pre><code>##       [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+##  [1,]   22    4    1    0    0    0    0    0    0    71
+##  [2,]    0   19    2    0    0    0    0    0    0    77
+##  [3,]    0    0   20    7    0    0    0    1    0    75
+##  [4,]    0    0    0   27    2    1    0    0    0    74
+##  [5,]    0    0    0    0   21    5    0    0    0    96
+##  [6,]    0    0    0    0    0   25    4    1    0    89
+##  [7,]    0    0    0    0    0    0   19    3    0    81
+##  [8,]    0    0    0    0    0    0    0   20    6    96
+##  [9,]    0    0    0    0    0    0    0    0   23    96</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">bugs.data$B</code></pre></div>
+<pre><code>##  [1] 62 49 59 69 74 59 60 82 67 72</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">bugs.data$J</code></pre></div>
+<pre><code>##  [1]  98  95 102 106 118  98  92 128 109 108</code></pre>
+</div>
+<div id="try-mcmc-and-study-results" class="slide section level1">
+<h1>Try MCMC and study results</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">nimbleOptions</span>(<span class="dt">verbose =</span> <span class="ot">FALSE</span>)
+## 1. Build model
+ipm_model &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(ipm_code,
+                         <span class="dt">constants =</span> bugs.data,
+                         <span class="dt">inits =</span> initsVals)
+## 2. Build MCMC configuration and samplers:
+ipm_mcmc &lt;-<span class="st"> </span><span class="kw">buildMCMC</span>(ipm_model)
+## 3. Compile model via generated C++.
+Cipm_model &lt;-<span class="st"> </span><span class="kw">compileNimble</span>(ipm_model)
+## 4. Compile MCMC via generated C++
+Cipm_mcmc &lt;-<span class="st"> </span><span class="kw">compileNimble</span>(ipm_mcmc, <span class="dt">project =</span> ipm_model)
+## 5. Run MCMC. (nimble does not natively support multiple chains.)
+<span class="co"># MCMC settings</span>
+ni &lt;-<span class="st"> </span><span class="dv">3000</span>; nt &lt;-<span class="st"> </span><span class="dv">1</span>; nb &lt;-<span class="st"> </span><span class="dv">1000</span>; nc &lt;-<span class="st"> </span><span class="dv">3</span>
+samples &lt;-<span class="st"> </span><span class="kw">runMCMC</span>(Cipm_mcmc, ni)</code></pre></div>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">colnames</span>(samples)</code></pre></div>
+<pre><code>##  [1] &quot;N[1, 1]&quot;   &quot;N[2, 1]&quot;   &quot;N[1, 2]&quot;   &quot;N[2, 2]&quot;   &quot;N[1, 3]&quot;  
+##  [6] &quot;N[2, 3]&quot;   &quot;N[1, 4]&quot;   &quot;N[2, 4]&quot;   &quot;N[1, 5]&quot;   &quot;N[2, 5]&quot;  
+## [11] &quot;N[1, 6]&quot;   &quot;N[2, 6]&quot;   &quot;N[1, 7]&quot;   &quot;N[2, 7]&quot;   &quot;N[1, 8]&quot;  
+## [16] &quot;N[2, 8]&quot;   &quot;N[1, 9]&quot;   &quot;N[2, 9]&quot;   &quot;N[1, 10]&quot;  &quot;N[2, 10]&quot; 
+## [21] &quot;mean.f&quot;    &quot;mean.p&quot;    &quot;mean.sa&quot;   &quot;mean.sj&quot;   &quot;sigma.f&quot;  
+## [26] &quot;sigma.obs&quot; &quot;sigma.sa&quot;  &quot;sigma.sj&quot;</code></pre>
+<h2 id="study-results">Study results</h2>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## Pick a few trace plots
+<span class="kw">plot</span>(samples[,<span class="st">&#39;N[1, 1]&#39;</span>]) ## yuck</code></pre></div>
+<div class="figure">
+<img src="figure/study-mcmc-results-1.png" alt="plot of chunk study-mcmc-results" />
+<p class="caption">plot of chunk study-mcmc-results</p>
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot</span>(samples[,<span class="st">&#39;N[1, 2]&#39;</span>]) ## much better</code></pre></div>
+<div class="figure">
+<img src="figure/study-mcmc-results-2.png" alt="plot of chunk study-mcmc-results" />
+<p class="caption">plot of chunk study-mcmc-results</p>
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot</span>(samples[,<span class="st">&#39;mean.p&#39;</span>]) ## looks pretty good</code></pre></div>
+<div class="figure">
+<img src="figure/study-mcmc-results-3.png" alt="plot of chunk study-mcmc-results" />
+<p class="caption">plot of chunk study-mcmc-results</p>
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## look at some pairs, dropped burnin = 500
+<span class="kw">pairs</span>(samples[-(<span class="dv">1</span>:<span class="dv">500</span>), <span class="dv">1</span>:<span class="dv">8</span>], <span class="dt">pch =</span> <span class="st">&#39;.&#39;</span>)</code></pre></div>
+<div class="figure">
+<img src="figure/study-mcmc-results-4.png" alt="plot of chunk study-mcmc-results" />
+<p class="caption">plot of chunk study-mcmc-results</p>
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">pairs</span>(samples[-(<span class="dv">1</span>:<span class="dv">500</span>), <span class="dv">9</span>:<span class="dv">16</span>], <span class="dt">pch =</span> <span class="st">&#39;.&#39;</span>)</code></pre></div>
+<div class="figure">
+<img src="figure/study-mcmc-results-5.png" alt="plot of chunk study-mcmc-results" />
+<p class="caption">plot of chunk study-mcmc-results</p>
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## skip some
+<span class="kw">pairs</span>(samples[-(<span class="dv">1</span>:<span class="dv">500</span>), <span class="dv">21</span>:<span class="dv">28</span>], <span class="dt">pch =</span> <span class="st">&#39;.&#39;</span>) ## some parameters mixing poorly!</code></pre></div>
+<div class="figure">
+<img src="figure/study-mcmc-results-6.png" alt="plot of chunk study-mcmc-results" />
+<p class="caption">plot of chunk study-mcmc-results</p>
+</div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## Look at ESS:
+<span class="kw">library</span>(coda)
+<span class="kw">effectiveSize</span>(samples)</code></pre></div>
+<pre><code>##    N[1, 1]    N[2, 1]    N[1, 2]    N[2, 2]    N[1, 3]    N[2, 3] 
+##   9.619708   4.156681 108.227309  93.336616 111.248926  68.794176 
+##    N[1, 4]    N[2, 4]    N[1, 5]    N[2, 5]    N[1, 6]    N[2, 6] 
+##  77.797537  64.652178  87.453276 119.710995  61.155843  52.277386 
+##    N[1, 7]    N[2, 7]    N[1, 8]    N[2, 8]    N[1, 9]    N[2, 9] 
+##  79.237180  55.712567  85.348799  81.725101  50.235958  41.768137 
+##   N[1, 10]   N[2, 10]     mean.f     mean.p    mean.sa    mean.sj 
+##  55.752390  83.491075 206.146941 385.111906  34.075145   1.660035 
+##    sigma.f  sigma.obs   sigma.sa   sigma.sj 
+##  66.152794  35.822687  57.008339   7.233599</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## We see horrible mixing for mean.sj and mean.f, and bad mixing for sigma.f
+## Is mean.sj correlated with anything?
+<span class="kw">cor</span>(samples)[,<span class="st">&#39;mean.sj&#39;</span>]</code></pre></div>
+<pre><code>##      N[1, 1]      N[2, 1]      N[1, 2]      N[2, 2]      N[1, 3] 
+## -0.792894916  0.797307746  0.051840939 -0.078317999  0.198153590 
+##      N[2, 3]      N[1, 4]      N[2, 4]      N[1, 5]      N[2, 5] 
+## -0.045514890  0.044336231 -0.076913497 -0.173884154  0.138358766 
+##      N[1, 6]      N[2, 6]      N[1, 7]      N[2, 7]      N[1, 8] 
+##  0.270299129 -0.226191521  0.038866010 -0.042709582  0.046789581 
+##      N[2, 8]      N[1, 9]      N[2, 9]     N[1, 10]     N[2, 10] 
+##  0.007659393  0.061857881  0.053933646  0.270864320 -0.264214878 
+##       mean.f       mean.p      mean.sa      mean.sj      sigma.f 
+##  0.086699562  0.008435381 -0.108622295  1.000000000 -0.196124623 
+##    sigma.obs     sigma.sa     sigma.sj 
+## -0.058595844 -0.150258487 -0.824192970</code></pre>
+<p>We see <code>mean.sj</code> is highly correlated with <code>mean.f</code>.</p>
+<p>This makes sense. We might consider how to sample them jointly in a sensible way.</p>
+<p>But let's instead focus on the correlated adult-juvenile pairs. Sometimes mixing one part of a model more helps other parts mix tool.</p>
+</div>
+<div id="sample-adults-and-juveniles-jointly-at-each-time" class="slide section level1">
+<h1>Sample adults and juveniles jointly at each time</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">sampler_JuvAdult &lt;-<span class="st"> </span><span class="kw">nimbleFunction</span>(
+    <span class="dt">name =</span> <span class="st">&#39;sampler_JuvAdult&#39;</span>,
+    <span class="dt">contains =</span> sampler_BASE,
+    <span class="dt">setup =</span> function(model, mvSaved, target, control) {
+        adaptive      &lt;-<span class="st"> </span>if(!<span class="kw">is.null</span>(control$adaptive))      control$adaptive      else <span class="ot">TRUE</span>
+        adaptInterval &lt;-<span class="st"> </span>if(!<span class="kw">is.null</span>(control$adaptInterval)) control$adaptInterval else <span class="dv">200</span>
+        scale         &lt;-<span class="st"> </span>if(!<span class="kw">is.null</span>(control$scale))         control$scale         else <span class="dv">1</span>
+        constantSum   &lt;-<span class="st"> </span>if(!<span class="kw">is.null</span>(control$constantSum))   <span class="kw">as.integer</span>(control$constantSum)   else 1L        
+        calcNodes &lt;-<span class="st"> </span>model$<span class="kw">getDependencies</span>(target)
+        ##
+        targetJuv &lt;-<span class="st"> </span>target[<span class="dv">1</span>]
+        targetAdult &lt;-<span class="st"> </span>target[<span class="dv">2</span>]
+        ## numeric value generation
+        scaleOriginal &lt;-<span class="st"> </span>scale
+        timesRan      &lt;-<span class="st"> </span><span class="dv">0</span>
+        timesAccepted &lt;-<span class="st"> </span><span class="dv">0</span>
+        timesAdapted  &lt;-<span class="st"> </span><span class="dv">0</span>
+        optimalAR     &lt;-<span class="st"> </span><span class="fl">0.44</span>
+        gamma1        &lt;-<span class="st"> </span><span class="dv">0</span>
+
+    },
+    <span class="dt">run =</span> function() {
+        propLogScale &lt;-<span class="st"> </span><span class="dv">0</span>
+        propDiff &lt;-<span class="st"> </span><span class="kw">round</span>(<span class="kw">rnorm</span>(<span class="dv">1</span>, <span class="dt">mean =</span> <span class="dv">0</span>, <span class="dt">sd =</span> scale))
+        model[[targetJuv]] &lt;&lt;-<span class="st"> </span>model[[targetJuv]] +<span class="st"> </span>propDiff
+        model[[targetAdult]] &lt;&lt;-<span class="st"> </span>model[[targetAdult]] -<span class="st"> </span>constantSum *<span class="st"> </span>propDiff
+        logMHR &lt;-<span class="st"> </span><span class="kw">calculateDiff</span>(model, calcNodes)
+        jump &lt;-<span class="st"> </span><span class="kw">decide</span>(logMHR)
+        if(jump) <span class="kw">nimCopy</span>(<span class="dt">from =</span> model, <span class="dt">to =</span> mvSaved, <span class="dt">row =</span> <span class="dv">1</span>, <span class="dt">nodes =</span> calcNodes, <span class="dt">logProb =</span> <span class="ot">TRUE</span>)
+        else     <span class="kw">nimCopy</span>(<span class="dt">from =</span> mvSaved, <span class="dt">to =</span> model, <span class="dt">row =</span> <span class="dv">1</span>, <span class="dt">nodes =</span> calcNodes, <span class="dt">logProb =</span> <span class="ot">TRUE</span>)
+        if(adaptive)     <span class="kw">adaptiveProcedure</span>(jump)
+    },
+    <span class="dt">methods =</span> <span class="kw">list</span>(
+        <span class="dt">adaptiveProcedure =</span> function(<span class="dt">jump =</span> <span class="kw">logical</span>()) {
+            timesRan &lt;&lt;-<span class="st"> </span>timesRan +<span class="st"> </span><span class="dv">1</span>
+            if(jump)     timesAccepted &lt;&lt;-<span class="st"> </span>timesAccepted +<span class="st"> </span><span class="dv">1</span>
+            if(timesRan %%<span class="st"> </span>adaptInterval ==<span class="st"> </span><span class="dv">0</span>) {
+                acceptanceRate &lt;-<span class="st"> </span>timesAccepted /<span class="st"> </span>timesRan
+                timesAdapted &lt;&lt;-<span class="st"> </span>timesAdapted +<span class="st"> </span><span class="dv">1</span>
+                gamma1 &lt;&lt;-<span class="st"> </span><span class="dv">1</span>/((timesAdapted +<span class="st"> </span><span class="dv">3</span>)^<span class="fl">0.8</span>)
+                gamma2 &lt;-<span class="st"> </span><span class="dv">10</span> *<span class="st"> </span>gamma1
+                adaptFactor &lt;-<span class="st"> </span><span class="kw">exp</span>(gamma2 *<span class="st"> </span>(acceptanceRate -<span class="st"> </span>optimalAR))
+                scale &lt;&lt;-<span class="st"> </span>scale *<span class="st"> </span>adaptFactor
+                timesRan &lt;&lt;-<span class="st"> </span><span class="dv">0</span>
+                timesAccepted &lt;&lt;-<span class="st"> </span><span class="dv">0</span>
+            }
+        },
+        <span class="dt">reset =</span> function() {
+            scale &lt;&lt;-<span class="st"> </span>scaleOriginal
+            timesRan      &lt;&lt;-<span class="st"> </span><span class="dv">0</span>
+            timesAccepted &lt;&lt;-<span class="st"> </span><span class="dv">0</span>
+            timesAdapted  &lt;&lt;-<span class="st"> </span><span class="dv">0</span>
+            gamma1 &lt;&lt;-<span class="st"> </span><span class="dv">0</span>
+        }
+    ), <span class="dt">where =</span> <span class="kw">getLoadingNamespace</span>()
+)
+
+configureMCMC_IPM &lt;-<span class="st"> </span>function(model) {
+    mcmcConf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(model)
+    mcmcConf$<span class="kw">removeSamplers</span>(<span class="st">&#39;N&#39;</span>)
+    Nnodes &lt;-<span class="st"> </span>model$<span class="kw">expandNodeNames</span>(<span class="st">&#39;N&#39;</span>)
+    for(i in <span class="kw">seq</span>(<span class="dv">1</span>, <span class="kw">length</span>(Nnodes), <span class="dt">by =</span> <span class="dv">2</span>)) {
+        JuvAdultPair &lt;-<span class="st"> </span>Nnodes[i:(i<span class="dv">+1</span>)]## e.g. c(&#39;N[1, 1]&#39;, &#39;N[2, 1]&#39;)
+        mcmcConf$<span class="kw">addSampler</span>(JuvAdultPair,
+                            <span class="dt">type =</span> sampler_JuvAdult)
+        mcmcConf$<span class="kw">addSampler</span>(JuvAdultPair,
+                            <span class="dt">type =</span> sampler_JuvAdult,
+                            <span class="dt">control =</span> <span class="kw">list</span>(<span class="dt">constantSum =</span> <span class="ot">FALSE</span>))
+    }
+    mcmcConf
+}</code></pre></div>
+</div>
+<div id="lets-compare-performance" class="slide section level1">
+<h1>Let's compare performance</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">configureMCMC_IPM &lt;-<span class="st"> </span>function(model) {
+    mcmcConf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(model)
+    mcmcConf$<span class="kw">removeSamplers</span>(<span class="st">&#39;N&#39;</span>)
+    Nnodes &lt;-<span class="st"> </span>model$<span class="kw">expandNodeNames</span>(<span class="st">&#39;N&#39;</span>)
+    for(i in <span class="kw">seq</span>(<span class="dv">1</span>, <span class="kw">length</span>(Nnodes), <span class="dt">by =</span> <span class="dv">2</span>)) {
+        JuvAdultPair &lt;-<span class="st"> </span>Nnodes[i:(i<span class="dv">+1</span>)]## e.g. c(&#39;N[1, 1]&#39;, &#39;N[2, 1]&#39;)
+        mcmcConf$<span class="kw">addSampler</span>(JuvAdultPair,
+                            <span class="dt">type =</span> sampler_JuvAdult)
+        mcmcConf$<span class="kw">addSampler</span>(JuvAdultPair,
+                            <span class="dt">type =</span> sampler_JuvAdult,
+                            <span class="dt">control =</span> <span class="kw">list</span>(<span class="dt">constantSum =</span> <span class="ot">FALSE</span>))
+    }
+    mcmcConf
+}
+
+ipm_comparison &lt;-<span class="st"> </span><span class="kw">compareMCMCs</span>(
+    <span class="kw">list</span>(<span class="dt">code =</span> ipm_code,
+         <span class="dt">inits =</span> initsVals,
+         <span class="dt">data =</span> bugs.data),
+    <span class="dt">MCMCs =</span> <span class="kw">c</span>(<span class="st">&#39;nimble&#39;</span>,<span class="st">&#39;jags&#39;</span>,<span class="st">&#39;nimbleCustom&#39;</span>),
+    <span class="dt">MCMCdefs =</span> <span class="kw">list</span>(<span class="dt">nimbleCustom =</span> <span class="kw">quote</span>({
+        <span class="kw">configureMCMC_IPM</span>(Rmodel)
+    })),
+    <span class="dt">summary =</span> <span class="ot">FALSE</span>,
+    <span class="dt">burnin =</span> <span class="dv">5000</span>,
+    <span class="dt">niter =</span> <span class="dv">20000</span>,
+    <span class="dt">monitors =</span> parameters)
+
+<span class="kw">make_MCMC_comparison_pages</span>(ipm_comparison,
+                           <span class="dt">dir =</span> <span class="st">&quot;ipm_comparison&quot;</span>,
+                           <span class="dt">modelNames =</span> <span class="st">&quot;woodshrike&quot;</span>)
+
+##browseURL(file.path(&quot;ipm_comparison&quot;,&quot;woodshrike.html&quot;))</code></pre></div>
+<p>Results are <a href="ipm_comparisons/woodshrike.html">here</a></p>
+</div>
+</body>
+</html>

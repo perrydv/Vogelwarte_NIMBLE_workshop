@@ -1,6 +1,6 @@
 ---
-title: "Vogelwarte NIMBLE workshop: Day 1"
-subtitle: "April 2018"
+title: "Vogelwarte NIMBLE workshop"
+subtitle: "April 23-25, 2018"
 author: "Perry de Valpine, UC Berkeley"
 output:
   html_document:
@@ -66,16 +66,20 @@ output:
 
 # Writing new MCMC samplers
 
-- Introduction to MCMC samplers in NIMBLE
-- Exercise: Write your own random-walk Metropolis-Hastings
-- Exercise: Discrete random-walk sampler for latent population sizes
-- Reversible jump for model selection
-- Reversible jump for data augmentation
+- [Introduction to MCMC samplers in NIMBLE: write our own random-walk Metropolis-Hastings.](../introduction_to_samplers_write_MH/introduction_to_samplers_write_MH_slides.html)
+- [Worked example: jointly sample juveniles and adults in an integrated population model.](../new_samplers_IPM_woodchat_shrike/new_samplers_IPM_woodchat_shrike_slides.html)
+- [Reversible jump for model selection: example on web site](https://r-nimble.org/examples).
+- [Reversible jump for data augmentation: Czech transect capture-recapture (just example code)](../examples_code/CR_DA_Czech/CR_DA_Czech.R)
+- Spatial capture-recapture: discussion (also see [this](https://www.nature.com/articles/srep41036) and [this](https://www.nature.com/articles/s41598-018-20675-9) paper by Jose Jimenez.   Also see [this old list post](https://nature.berkeley.edu/~pdevalpine/SCR_NIMBLE_ideas/SCR_NIMBLE_ideas.html) by me, using a much older version of nimble.
 
 # Other algorithms in NIMBLE
 
-- Maximum likelihood estimation using MCEM.
+- [Maximum likelihood estimation using MCEM.](../MCEM_Nmixture_with_covariates/MCEM_Nmixture_with_covariates_slides.html)
 - Cross-validation.
 - WAIC.
 - Future: Calibrated posterior predictive p-values.
 - Your idea here.
+
+# Future directions
+
+- [Future directions of NIMBLE development](../future_directions/future_directions_slides.html)

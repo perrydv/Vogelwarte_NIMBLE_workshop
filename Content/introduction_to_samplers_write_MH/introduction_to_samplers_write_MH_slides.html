@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Perry de Valpine, UC Berkeley" />
+  <title>Introduction to writing samplers in NIMBLE: Metropolis-Hastings</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Introduction to writing samplers in NIMBLE: Metropolis-Hastings</h1>
+  <h1 class="subtitle">April 2018</h1>
+  <p class="author">
+Perry de Valpine, UC Berkeley
+  </p>
+</div>
+<div id="look-at-the-samplers-that-come-in-nimble" class="slide section level1">
+<h1>Look at the samplers that come in NIMBLE</h1>
+<p>You can find NIMBLE's samplers in the source code on GitHub or CRAN. <a href="https://github.com/nimble-dev/nimble/blob/devel/packages/nimble/R/MCMC_samplers.R">Here it is on GitHub.</a></p>
+</div>
+<div id="required-arguments-and-methods-for-a-sampler-nimblefunction" class="slide section level1">
+<h1>Required arguments and methods for a sampler <code>nimbleFunction</code></h1>
+<ul>
+<li><p>It must contain the argument <code>contains = sampler_BASE</code>.</p>
+<ul>
+<li>(This is a simple class inheritance system that mimic's R's <code>contains</code> argument.)</li>
+</ul></li>
+<li><p>The <code>setup</code> function must take the arguments <code>model</code>, <code>mvSaved</code>, <code>target</code>, and <code>control</code>.</p>
+<ul>
+<li><code>model</code> is the model being sampled.</li>
+<li><code>mvSaved</code> is a length-one <em>modelValues</em> object that keeps an up-to-date copy of all model values, including log probabilities.</li>
+<li><code>target</code> is a vector of node names to be sampled.</li>
+<li><code>control</code> is a list that can contain whatever elements you want.</li>
+</ul></li>
+<li><p>The <code>run</code> function (method) must execute the sampler.</p></li>
+<li><p>The <code>reset</code> method must reset the sampler if that means anything for the particular sampler.</p>
+<ul>
+<li>Example: An adaptive sampler would reset its proposal distribution.</li>
+</ul></li>
+<li><p>If the sampler is defined in package source code, it must contain <code>where = getLoadingNamespace()</code>.</p>
+<ul>
+<li>We don't need that today.</li>
+</ul></li>
+</ul>
+</div>
+<div id="required-behavior-of-a-sampler" class="slide section level1">
+<h1>Required behavior of a sampler:</h1>
+<ul>
+<li><p>Upon entry, the sampler can assume that <code>mvSaved[[1]</code> contains a complete copy of the model's variables, including logProb variables.</p></li>
+<li><p>The sampler may do whatever it wants (assuming it is valid for MCMC) in its <code>run</code> function, including modifying values of model variables, including logProb variables.</p></li>
+<li><p>Upon exiting the <code>run</code> function, <code>mvSaved[[1]]</code> must again contain a complete copy of the model's variables, including logProb variables.</p>
+<ul>
+<li>The <code>mvSaved[[1]]</code> is like the &quot;current&quot; state of the model.</li>
+<li>The <code>run</code> function puts proposed values in the model and does appropriate calculations.</li>
+<li>If the proposal is rejected: copy from <code>mvSaved[[1]]</code> to the model.</li>
+<li>If the proposal is accepted: copy from the model to <code>mvSaved[[1]]</code>.</li>
+</ul></li>
+</ul>
+</div>
+<div id="example-write-random-walk-metropolis-hastings" class="slide section level1">
+<h1>Example: write random-walk Metropolis-Hastings</h1>
+<p>Let's sample the world's simplest model:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">nimbleOptions</span>(<span class="dt">verbose =</span> <span class="ot">FALSE</span>)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">simpleModel &lt;-<span class="st"> </span><span class="kw">nimbleModel</span>(
+    <span class="kw">nimbleCode</span>({silly ~<span class="st"> </span><span class="kw">dnorm</span>(<span class="dv">0</span>, <span class="dt">sd =</span> <span class="dv">20</span>)})
+)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">MCMCconf &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(simpleModel, <span class="dt">nodes =</span> <span class="ot">NULL</span>)
+MCMCconf$<span class="kw">addSampler</span>(<span class="dt">target =</span> <span class="st">&quot;silly&quot;</span>, <span class="dt">type =</span> <span class="st">&quot;RW&quot;</span>)
+## Otherwise it would be sampled by a posterior predictive
+## sampler, which would not be interesting!
+MCMC &lt;-<span class="st"> </span><span class="kw">buildMCMC</span>(MCMCconf)</code></pre></div>
+<h2 id="lets-even-run-this-uncompiled">Let's even run this uncompiled:</h2>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">MCMC$<span class="kw">run</span>(<span class="dv">1000</span>)</code></pre></div>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">samples &lt;-<span class="st"> </span><span class="kw">as.matrix</span>(MCMC$mvSamples)
+<span class="kw">plot</span>(samples[,<span class="st">&quot;silly&quot;</span>])</code></pre></div>
+<div class="figure">
+<img src="figure/sample1-1.png" alt="plot of chunk sample1" />
+<p class="caption">plot of chunk sample1</p>
+</div>
+</div>
+<div id="write-our-own-rw-mh-sampler-non-adaptive" class="slide section level1">
+<h1>Write our own RW-MH sampler (non-adaptive)</h1>
+<p>Let's do this together</p>
+</div>
+<div id="write-our-own-rw-mh-sampler-non-adaptive-1" class="slide section level1">
+<h1>Write our own RW-MH sampler (non-adaptive)</h1>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">our_RWMH &lt;-<span class="st"> </span><span class="kw">nimbleFunction</span>(
+    <span class="dt">contains =</span> sampler_BASE,
+    <span class="dt">setup =</span> function(model, mvSaved, target, control) {
+        scale  &lt;-<span class="st"> </span>if(!<span class="kw">is.null</span>(control$scale))         control$scale         else <span class="dv">1</span>
+        calcNodes &lt;-<span class="st"> </span>model$<span class="kw">getDependencies</span>(target)
+    },
+    <span class="dt">run =</span> function() {
+        currentValue &lt;-<span class="st"> </span>model[[target]]
+        propValue &lt;-<span class="st"> </span><span class="kw">rnorm</span>(<span class="dv">1</span>, <span class="dt">mean =</span> currentValue,  <span class="dt">sd =</span> scale)
+        model[[target]] &lt;&lt;-<span class="st"> </span>propValue
+        logMHR &lt;-<span class="st"> </span><span class="kw">calculateDiff</span>(model, calcNodes)
+        jump &lt;-<span class="st"> </span><span class="kw">decide</span>(logMHR)
+        if(jump) <span class="kw">nimCopy</span>(<span class="dt">from =</span> model, <span class="dt">to =</span> mvSaved, <span class="dt">row =</span> <span class="dv">1</span>, <span class="dt">nodes =</span> calcNodes, <span class="dt">logProb =</span> <span class="ot">TRUE</span>)
+        else     <span class="kw">nimCopy</span>(<span class="dt">from =</span> mvSaved, <span class="dt">to =</span> model, <span class="dt">row =</span> <span class="dv">1</span>, <span class="dt">nodes =</span> calcNodes, <span class="dt">logProb =</span> <span class="ot">TRUE</span>)
+    },
+    <span class="dt">methods =</span> <span class="kw">list</span>(
+        <span class="dt">reset =</span> function() {}
+    )
+)</code></pre></div>
+</div>
+<div id="use-the-sampler" class="slide section level1">
+<h1>Use the sampler</h1>
+<h2 id="small-proposal-sd">Small proposal sd</h2>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">MCMCconf2 &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(simpleModel, <span class="dt">nodes =</span> <span class="ot">NULL</span>)
+MCMCconf2$<span class="kw">addSampler</span>(<span class="dt">target =</span> <span class="st">&quot;silly&quot;</span>, <span class="dt">type =</span> our_RWMH, <span class="dt">control =</span> <span class="kw">list</span>(<span class="dt">scale =</span> <span class="dv">2</span>))
+MCMC2 &lt;-<span class="st"> </span><span class="kw">buildMCMC</span>(MCMCconf2)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">MCMC2$<span class="kw">run</span>(<span class="dv">1000</span>)</code></pre></div>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">samples2 &lt;-<span class="st"> </span><span class="kw">as.matrix</span>(MCMC2$mvSamples)
+<span class="kw">plot</span>(samples2[,<span class="st">&#39;silly&#39;</span>])</code></pre></div>
+<div class="figure">
+<img src="figure/run-our-sampler-1.png" alt="plot of chunk run-our-sampler" />
+<p class="caption">plot of chunk run-our-sampler</p>
+</div>
+<h2 id="try-debugging-out-sampler">Try debugging out sampler</h2>
+<h2 id="big-proposal-sd">Big proposal sd</h2>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">MCMCconf3 &lt;-<span class="st"> </span><span class="kw">configureMCMC</span>(simpleModel, <span class="dt">nodes =</span> <span class="ot">NULL</span>)
+MCMCconf3$<span class="kw">addSampler</span>(<span class="dt">target =</span> <span class="st">&quot;silly&quot;</span>, <span class="dt">type =</span> our_RWMH, <span class="dt">control =</span> <span class="kw">list</span>(<span class="dt">scale =</span> <span class="dv">100</span>))
+MCMC3 &lt;-<span class="st"> </span><span class="kw">buildMCMC</span>(MCMCconf3)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">MCMC3$<span class="kw">run</span>(<span class="dv">1000</span>)</code></pre></div>
+<pre><code>## |-------------|-------------|-------------|-------------|
+## |-------------------------------------------------------|</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">samples3 &lt;-<span class="st"> </span><span class="kw">as.matrix</span>(MCMC3$mvSamples)
+<span class="kw">plot</span>(samples3[,<span class="st">&#39;silly&#39;</span>])</code></pre></div>
+<div class="figure">
+<img src="figure/run-our-sampler2-1.png" alt="plot of chunk run-our-sampler2" />
+<p class="caption">plot of chunk run-our-sampler2</p>
+</div>
+</div>
+</body>
+</html>

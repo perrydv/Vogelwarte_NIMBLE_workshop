@@ -1,0 +1,73 @@
+---
+title: "MCEM in Nmixture example"
+subtitle: "April 2018"
+author: "Perry de Valpine, UC Berkeley"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+---
+
+```{r setup, include=FALSE} 
+library(methods) ## needed only when building documents outside of R
+library(nimble)
+library(mcmcplots)
+if(!exists("nimble_course_dir")) ## set your own nimble_course_dir if needed
+    nimble_course_dir <- file.path(getwd(),'..')
+cur_dir <- getwd()
+setwd(file.path(nimble_course_dir,
+                 'examples_code',
+                 'extra'))
+source("model1.R")
+setwd(cur_dir)
+```
+
+# Maximum likelihood for general hierarchical models.
+
+- A surprisingly difficult problem.
+
+- The likelihood to be maximized is integrated over the latent states.  (Otherwise it is not really a likelihood.)
+
+- First, do any summation/integration over latent states by direct math or computation if possible.
+
+    - Example: dCHR, dDHMM, dZIP (user-defined distributions to sum over discrete latent states)
+
+- Some approaches in the literature:
+
+    - MCEM, SAEM
+    - Data cloning (Lele et al; simultaneously inveted by Jacquier et al.)
+    - Laplace approximation & quadrature (coming in NIMBLE, I hope).
+	- More.
+
+# Monte Carlo Expectation Maximization
+
+- Expectation Maximization (Dempster et al. 1977) is a classic algorithm for maximizing
+likelihood of models with random effects/latent states/missing data.
+
+- Classic EM only works for models with conjugacy, so the math can be done explicitly.
+
+- Monte Carlo EM uses Monte Carlo approximation for any hierarchical model.
+
+- MCEM proceeds by iterating the following steps:
+
+    - Hold the top-level parameters fixed and sample the latent states by MCMC (or other method).
+    - Maximize the top-level parameters for the sample of latent states.
+
+- Increase the MCMC sample size as the algorithm proceeds to increase accuracy for convergence.
+
+- The algorithm is a workhorse but can be slow!
+
+# Example with the Nmixture model
+
+```{r runMCEM}
+MCEM <- buildMCEM(Nmix_model, c('N'), C = 0.02)
+MLEs <- MCEM$run(initM = 1000)
+MLEs
+save(MLEs, file = "Nmix_MLEs.RData")
+```
+
+The MLEs look reasonable compared to the posterior summaries.
+
+They could be more accurate by decreasing C.
+
+
